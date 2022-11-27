@@ -1,0 +1,26 @@
+c-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  overflow: auto;
+}
+
+c-content > header {
+  background: dimgray;
+  color: white;
+  padding: 1rem;
+}
+
+c-content > header menu {
+  margin: 0;
+  padding: 0;
+}
+
+c-content > header a,
+c-content > header a:visited {
+  color: white;
+}
+
+c-content > header li {
+  list-style-type: none;
+}

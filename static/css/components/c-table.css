@@ -1,0 +1,23 @@
+c-table {
+  display: flex;
+  overflow: auto;
+}
+
+c-table table {
+  flex: 1;
+}
+
+c-table thead th {
+  background-color: gainsboro;
+  text-align: left;
+}
+
+c-table td.integer,
+c-table td.bigint {
+  text-align: right;
+}
+
+c-table th,
+c-table td {
+  padding: 0.5rem 1rem;
+}

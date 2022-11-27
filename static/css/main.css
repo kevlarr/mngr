@@ -1,0 +1,31 @@
+@import "resets.css";
+@import "components/c-content.css";
+@import "components/c-form.css";
+@import "components/c-sidebar.css";
+@import "components/c-table.css";
+
+body {
+  display: flex;
+}
+
+a {
+  text-decoration: none;
+}
+
+a:active,
+a:focus,
+a:hover {
+  text-decoration: underline;
+}
+
+a, a:visited {
+  color: black;
+}
+
+a.disabled {
+  pointer-events: none;
+}
+
+button {
+  cursor: pointer;
+}

@@ -1,0 +1,56 @@
+c-form form {
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * Form fields
+ */
+
+c-form-field {
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+}
+
+c-form-field label {
+  font-weight: 900;
+  margin-bottom: 0.5rem;
+}
+
+c-form-field input,
+c-form-field textarea {
+  font-size: 16px;
+  padding: 0.25rem;
+}
+
+/*
+ * Form controls
+ */
+
+c-form c-form-controls {
+  display: flex;
+  justify-content: center;
+  padding: 1rem;
+}
+
+c-form button {
+  padding: 0.5rem 1rem;
+}
+
+/*
+ * Output
+ */
+
+c-form output {
+  border: 1px solid black;
+  border-radius: 2px;
+  margin: 1rem;
+  overflow: auto;
+  padding: 1rem;
+}
+
+c-form output.error {
+  border-color: firebrick;
+  color: firebrick;
+}

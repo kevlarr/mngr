@@ -1,0 +1,40 @@
+c-sidebar {
+  background: dodgerblue;
+  color: white;
+  display: block;
+  padding: 1rem;
+}
+
+c-sidebar h1 {
+  border: 0.5rem solid white;
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+}
+
+c-sidebar menu {
+  list-style-type: none;
+  padding: 0;
+}
+
+c-sidebar menu li {
+  display: flex;
+  padding: 0.25rem 0;
+}
+
+c-sidebar menu a {
+  flex: 1;
+}
+
+c-sidebar menu a,
+c-sidebar menu a:visited {
+  color: white;
+}
+
+c-sidebar menu a.current {
+  font-weight: 900;
+}
+
+c-sidebar menu a.current::before {
+  content: '▶  ';
+  font-size: 80%;
+}
