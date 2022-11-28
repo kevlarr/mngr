@@ -195,16 +195,7 @@ impl State {
             .await
             .unwrap();
 
-        // TODO: Parameterize this, maybe even an external TOML config file
-        let tablenames = vec![
-            "public.cities".to_owned(),
-            "public.city_zips".to_owned(),
-            "public.exids".to_owned(),
-            "public.states".to_owned(),
-            "public.zips".to_owned(),
-        ];
-
-        let schemas = sqlx::query_file_as!(SchemaRow, "queries/tables.sql", tablenames.as_slice())
+        let schemas = sqlx::query_file_as!(SchemaRow, "queries/tables.sql")
             .fetch_all(&pool)
             .await
             .unwrap();

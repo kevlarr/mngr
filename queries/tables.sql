@@ -22,7 +22,8 @@ from (
       from information_schema.columns
 
       -- Filtering columns by schema/table works as well as filtering the tables table itself
-      where concat(table_schema, '.', table_name) = any($1)
+      -- where concat(table_schema, '.', table_name) = any($1)
+      where table_schema = 'public'
 
       order by
         table_schema,
