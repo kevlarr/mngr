@@ -8,7 +8,7 @@ c-content {
 c-content > header {
   background: dimgray;
   color: white;
-  padding: 1rem;
+  padding-bottom: 0;
 }
 
 c-content > header menu {
@@ -21,6 +21,24 @@ c-content > header a:visited {
   color: white;
 }
 
-c-content > header li {
+c-content h2 {
+  padding: 0.5rem 2rem;
+  margin: 0;
+}
+
+c-content menu {
+  display: flex;
+}
+
+c-content li {
   list-style-type: none;
+}
+
+c-content menu a {
+  display: inline-block;
+  padding: 0.5rem 2rem;
+}
+
+c-content menu a.current {
+  border-bottom: 10px solid lightskyblue;
 }

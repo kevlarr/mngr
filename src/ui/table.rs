@@ -12,7 +12,7 @@ pub struct TableColumn {
 impl From<&Column> for TableColumn {
     fn from(column: &Column) -> Self {
         Self {
-            data_type: column.meta.data_type.clone(),
+            data_type: column.data_type.clone(),
             name: column.name.clone(),
         }
     }
@@ -20,17 +20,53 @@ impl From<&Column> for TableColumn {
 
 #[derive(Default)]
 pub struct Table {
+    schema_name: String,
+    table_name: String,
     columns: Vec<TableColumn>,
     rows: Vec<PgRow>,
 }
 
 impl Table {
-    pub fn new(columns: &[Column], rows: Vec<PgRow>) -> Self {
+    pub fn new(
+        schema_name: &str,
+        table_name: &str,
+        columns: &[Column],
+        rows: Vec<PgRow>,
+    ) -> Self {
         let columns = columns.iter()
             .map(|c| TableColumn::from(c))
             .collect();
 
-        Self { columns, rows }
+        Self {
+            schema_name: schema_name.to_owned(),
+            table_name: table_name.to_owned(),
+            columns,
+            rows,
+         }
+    }
+
+    fn render_row(&self, columns: &[TableColumn], row: &PgRow) -> Markup {
+        html! {
+            @let record_id: String = row.try_get("id").unwrap();
+
+            tr data-schema=(self.schema_name) data-table=(self.table_name) data-record=(record_id) {
+                @for column in columns {
+                    @let col_name: &str = column.name.as_ref();
+                    @let value: String = row.try_get(col_name).unwrap();
+
+                    td class=(&column.data_type) {
+                        @match column.data_type.as_ref() {
+                            "ltree" => {
+                                code { (value) }
+                            }
+                            _ => {
+                                (value)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -44,29 +80,19 @@ impl Render for Table {
                     thead {
                         tr {
                             @for column in &self.columns {
-                                th class=(column.data_type) { (column.name) }
+                                th class=(column.data_type) data-column=(column.name) { (column.name) }
                             }
                         }
                     }
                     tbody {
                         @for row in &self.rows {
-                            (render_row(self.columns.as_slice(), &row))
+                            (self.render_row(self.columns.as_slice(), &row))
                         }
                     }
+                    caption {
+                        "Double-click any row to edit"
+                    }
                 }
-            }
-        }
-    }
-}
-
-fn render_row(columns: &[TableColumn], row: &PgRow) -> Markup {
-    html! {
-        tr {
-            @for column in columns {
-                @let col_name: &str = column.name.as_ref();
-                @let value: String = row.try_get(col_name).unwrap();
-
-                td class=(&column.data_type) { (value) }
             }
         }
     }

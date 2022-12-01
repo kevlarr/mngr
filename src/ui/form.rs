@@ -1,9 +1,7 @@
-
 use maud::{html, Markup, Render};
-use sqlx::Error as SqlError;
+use sqlx::{postgres::PgRow, Error as SqlError, Row};
 
 use crate::state::Column;
-
 
 
 #[derive(Default)]
@@ -27,6 +25,7 @@ pub struct TextAreaAttributes {
     rows: Option<i64>,
 }
 
+
 pub enum InputType {
     Number(NumberInputAttributes),
     Text(TextInputAttributes),
@@ -37,9 +36,11 @@ pub enum InputType {
 pub struct Field {
     name: String,
     input_type: InputType,
+    value: Option<String>,
 }
 
 impl Field {
+    /*
     pub fn number(mut self, callback: fn(&mut NumberInputAttributes)) -> Self {
         let mut attrs = NumberInputAttributes::default();
         callback(&mut attrs);
@@ -55,12 +56,17 @@ impl Field {
         self.input_type = InputType::TextArea(attrs);
         self
     }
+    */
+
+    fn value(&mut self, val: String) {
+        self.value = Some(val);
+    }
 }
 
 impl From<&Column> for Field {
     fn from(column: &Column) -> Self {
-        let input_type = match column.meta.data_type.as_ref() {
-            "bigint" | "integer" =>
+        let input_type = match column.data_type.as_ref() {
+            "int4" | "int8" =>
                 InputType::Number(NumberInputAttributes::default()),
             "text" =>
                 InputType::TextArea(TextAreaAttributes::default()),
@@ -70,6 +76,7 @@ impl From<&Column> for Field {
 
         Self {
             name: column.name.to_owned(),
+            value: None,
             input_type,
         }
     }
@@ -91,7 +98,9 @@ impl Render for Field {
                         min=[attrs.min]
                         max=[attrs.max]
                         step=[attrs.step]
-                        {}
+                        value=[&self.value]
+                    {
+                    }
                 }
                 InputType::Text(attrs) => {
                     input
@@ -101,7 +110,9 @@ impl Render for Field {
                         minlength=[attrs.minlength]
                         maxlength=[attrs.maxlength]
                         placeholder=[&attrs.placeholder]
-                        {}
+                        value=[&self.value]
+                    {
+                    }
                 }
                 InputType::TextArea(attrs) => {
                     @let rows = attrs.rows.unwrap_or(1);
@@ -112,13 +123,16 @@ impl Render for Field {
                         maxlength=[attrs.maxlength]
                         minlength=[attrs.minlength]
                         rows=(rows)
-                        {}
+                    {
+                        @if let Some(value) = &self.value {
+                            (value)
+                        }
+                    }
                 }
             }
         }
     }
 }
-
 
 
 #[derive(Default)]
@@ -143,6 +157,16 @@ impl Form {
 
     pub fn error(mut self, error: SqlError) -> Self {
         self.error = Some(error);
+        self
+    }
+
+    pub fn row(mut self, row: &PgRow) -> Self {
+        for field in &mut self.fields {
+            let value: String = row.try_get(field.name.as_str()).unwrap();
+
+            field.value(value);
+        }
+
         self
     }
 

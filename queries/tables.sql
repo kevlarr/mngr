@@ -1,42 +1,68 @@
 select
-    q.schema_name as "name!",
-    array_agg(q.table_json) as "tables!:Vec<Table>"
+    schema_name as name,
+    array_agg(jsonb_pretty(jsonb_build_object(
+        'name', table_name,
+        'columns', columns
+    ))) as "tables!:Vec<Table>"
 
 from (
     select
-        t.table_schema as schema_name,
-        json_build_object(
-          'name', t.table_name,
-          'meta', to_json(t),
-          'columns', array_agg(
-            json_build_object(
-              'name', c.column_name,
-              'meta', to_json(c)
-            )
-          )
-        ) as table_json
-
-    from information_schema.tables t
-    join (
-      select *
-      from information_schema.columns
-
-      -- Filtering columns by schema/table works as well as filtering the tables table itself
-      -- where concat(table_schema, '.', table_name) = any($1)
-      where table_schema = 'public'
-
-      order by
-        table_schema,
+        schema_name,
         table_name,
-        ordinal_position
+        array_agg(jsonb_build_object(
+            'name', column_name,
+            'data_type', type_name,
+            'position', position,
+            'nullable', nullable,
+            'identity', identity,
+            'generated', generated,
+            'expression', expression
+        )) as columns
 
-    ) c using (table_schema, table_name)
+    from (
+        select
+            n.nspname as schema_name,
+            c.relname as table_name,
+            a.attname as column_name,
+            t.typname as type_name,
+            a.attnum  as position,
+            not a.attnotnull as nullable,
 
-    group by
-        t.*,
-        t.table_schema,
-        t.table_name
-) q
+            case
+            when a.attidentity = 'a' then 'always'
+            when a.attidentity = 'd' then 'default'
+            end as identity,
 
-group by q.schema_name
+            case
+            when a.attgenerated = 's' then 'stored'
+            end as generated,
+
+            pg_get_expr(ad.adbin, ad.adrelid) as expression
+
+        from pg_attribute     a
+        join pg_class         c on c.oid = a.attrelid
+        join pg_namespace     n on n.oid = c.relnamespace
+        join pg_type          t on t.oid = a.atttypid
+        left join pg_attrdef ad on ad.adrelid = c.oid and ad.adnum = a.attnum
+
+        where
+            n.nspname = 'public' and
+            c.relname != 'jrny_revisions' and
+            c.relkind = 'r' and 
+            not a.attisdropped  and
+            a.attnum > 0
+
+        order by n.nspname, c.relname, a.attnum
+    ) q2
+
+    group by schema_name, table_name
+
+    order by schema_name, table_name
+
+) q1
+
+group by schema_name
+
+order by schema_name
 ;
+

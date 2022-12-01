@@ -4,96 +4,48 @@ use serde::Deserialize;
 use sqlx::{Executor, postgres::{PgPool, PgPoolOptions}, types::Json};
 
 
+/*
 #[derive(Clone, Debug, Deserialize)]
-pub struct ColumnMeta {
-    pub column_default: Option<String>,
-    pub data_type: String,
-    pub generation_expression: Option<String>,
-    pub is_nullable: String,
-    pub is_generated: String,
-    pub ordinal_position: i32,
-
-    pub is_identity: String,
-    pub identity_generation: Option<String>,
-    // pub identity_start: Option<String>,
-    // pub identity_increment: Option<String>,
-    // pub identity_maximum: Option<String>,
-    // pub identity_minimum: Option<String>,
-    // pub identity_cycle: Option<String>,
-
-    // character_maximum_length: String,
-    // character_octet_length: String,
-
-    // table_catalog: String,
-    // table_schema: String,
-    // table_name: String,
-    // numeric_precision: String,
-    // numeric_precision_radix: String,
-    // numeric_scale: String,
-    // datetime_precision: String,
-    // interval_type: String,
-    // interval_precision: String,
-    // character_set_catalog: String,
-    // character_set_schema: String,
-    // character_set_name: String,
-    // collation_catalog: String,
-    // collation_schema: String,
-    // collation_name: String,
-    // domain_catalog: String,
-    // domain_schema: String,
-    // domain_name: String,
-    // udt_catalog: String,
-    // udt_schema: String,
-    // udt_name: String,
-    // scope_catalog: String,
-    // scope_schema: String,
-    // scope_name: String,
-    // maximum_cardinality: String,
-    // dtd_identifier: String,
-    // is_self_referencing: String,
-    // is_updatable: String,
+pub enum Identity {
+    Null,
+    ByDefault,
+    Always,
 }
+
+#[derive(Clone, Debug, Deserialize)]
+pub enum Generated {
+    Null,
+    Stored,
+}
+*/
+
+
+
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct ColumnRow {
     pub name: String,
-    pub meta: Json<ColumnMeta>,
+    pub data_type: String,
+    pub position: i32,
+    pub nullable: bool,
+    pub identity: Option<String>,
+    pub generated: Option<String>,
+    pub expression: Option<String>,
 }
 
 impl ColumnRow {
     pub fn always_generated(&self) -> bool {
-        self.meta.is_generated == "ALWAYS" ||
-        self.meta.identity_generation.as_deref() == Some("ALWAYS")
-
+        self.identity.as_deref() == Some("always") ||
+        self.identity.as_deref() == Some("stored")
     }
 }
 
 pub type Column = Json<ColumnRow>;
 
 
-
-
-#[derive(Clone, Debug, Deserialize)]
-pub struct TableMeta {
-    pub table_catalog: String, // Database name
-    pub table_type: String,
-
-    // table_schema: String,
-    // table_name: String,
-    // self_referencing_column_name: String,
-    // reference_generation: String,
-    // user_defined_type_catalog: String,
-    // user_defined_type_schema: String,
-    // user_defined_type_name: String,
-    // is_insertable_into: String,
-    // is_typed: String,
-    // commit_action: String,
-}
-
 #[derive(Clone, Debug, Deserialize)]
 pub struct TableRow {
     pub name: String,
-    pub meta: Json<TableMeta>,
     pub columns: Vec<Json<ColumnRow>>,
 }
 
@@ -145,10 +97,6 @@ pub struct Schemas {
 }
 
 impl Schemas {
-    pub fn database_name(&self) -> &str {
-        &self.schemas[0].tables[0].meta.table_catalog
-    }
-
     pub fn get_table(&self, schema_name: &str, table_name: &str) -> Option<&Table> {
         self.schemas.get(*self.map.get(schema_name)?)?
             .get_table(table_name)
@@ -156,6 +104,10 @@ impl Schemas {
 
     pub fn iter(&self) -> std::slice::Iter<'_, Schema> {
         self.schemas.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.schemas.len()
     }
 }
 

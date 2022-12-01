@@ -4,8 +4,16 @@
 @import "components/c-sidebar.css";
 @import "components/c-table.css";
 
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,600;0,800;1,300;1,600;1,800&display=swap");
+
 body {
+  font-family: Montserrat;
+  font-weight: 300;
   display: flex;
+}
+
+h1, h2, h3, h4, h5, h6, th, label {
+  font-weight: 600;
 }
 
 a {
@@ -28,4 +36,13 @@ a.disabled {
 
 button {
   cursor: pointer;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+input, textarea {
+  font-family: Montserrat;
+  font-weight: 300;
 }

@@ -1,12 +1,12 @@
 c-sidebar {
-  background: dodgerblue;
+  background: steelblue;
   color: white;
   display: block;
   padding: 1rem;
 }
 
 c-sidebar h1 {
-  border: 0.5rem solid white;
+  border: 5px solid white;
   border-radius: 0.5rem;
   padding: 0.5rem;
 }
@@ -31,10 +31,9 @@ c-sidebar menu a:visited {
 }
 
 c-sidebar menu a.current {
-  font-weight: 900;
+  font-weight: 600;
 }
 
 c-sidebar menu a.current::before {
-  content: '▶  ';
-  font-size: 80%;
+  content: '▸  ';
 }
