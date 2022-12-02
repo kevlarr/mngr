@@ -304,20 +304,22 @@ async fn create_new_record(
     table: &Table,
     form_data: &HashMap<String, String>,
 ) -> Either<HttpResponse, Markup> {
-    let keys = form_data.keys()
-        .map(|k| &**k)
-        .collect::<Vec<_>>();
-
-    let columns = keys.join(", ");
-
-    // TODO: Optimize this with a map lookup of key -> table column
+    let mut columns = Vec::new();
     let mut bind_variables = Vec::new();
+    let mut bind_params = Vec::new();
+    let mut position = 1;
 
-    for (i, key) in keys.iter().enumerate() {
+    for (key, value) in form_data.iter() {
+        if value.len() == 0 { continue; }
+
+        // TODO: Optimize this with a map lookup of key -> table column
         let column = table.columns.iter().find(|c| c.name == *key).unwrap();
-        let variable = format!("${}::{}", i + 1, column.data_type);
 
-        bind_variables.push(variable);
+        columns.push(key.to_owned());
+        bind_variables.push(format!("${}::{}", position, column.data_type));
+        bind_params.push(value.to_owned());
+
+        position += 1;
     }
 
     let statement = format!(r#"
@@ -326,14 +328,14 @@ async fn create_new_record(
         "#,
         schema_name,
         table.name,
-        columns,
+        columns.join(", "),
         bind_variables.join(", "),
     );
 
     let mut query = sqlx::query(&statement);
 
-    for key in keys {
-        query = query.bind(form_data.get(key).unwrap());
+    for param in bind_params {
+        query = query.bind(param);
     }
 
     match query.execute(&state.pool).await {

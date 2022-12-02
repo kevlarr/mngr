@@ -1,8 +1,16 @@
 use maud::{html, Markup, Render};
 use sqlx::{postgres::PgRow, Error as SqlError, Row};
+use time::{macros::format_description, PrimitiveDateTime};
 
 use crate::state::Column;
 
+
+#[derive(Default)]
+pub struct DateTimeAttributes {
+    min: Option<PrimitiveDateTime>,
+    max: Option<PrimitiveDateTime>,
+    step: Option<usize>,
+}
 
 #[derive(Default)]
 pub struct NumberInputAttributes {
@@ -27,6 +35,7 @@ pub struct TextAreaAttributes {
 
 
 pub enum InputType {
+    DateTime(DateTimeAttributes),
     Number(NumberInputAttributes),
     Text(TextInputAttributes),
     TextArea(TextAreaAttributes),
@@ -70,6 +79,8 @@ impl From<&Column> for Field {
                 InputType::Number(NumberInputAttributes::default()),
             "text" =>
                 InputType::TextArea(TextAreaAttributes::default()),
+            "timestamptz" =>
+                InputType::DateTime(DateTimeAttributes::default()),
             _ =>
                 InputType::Text(TextInputAttributes::default()),
         };
@@ -90,6 +101,25 @@ impl Render for Field {
             label for=(self.name) { (self.name) }
 
             @match &self.input_type {
+                InputType::DateTime(attrs) => {
+                    @let format = format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
+                    @let min = attrs.min.map(|min| min.format(&format).unwrap());
+                    @let max = attrs.max.map(|max| max.format(&format).unwrap());
+
+                    // Haha this is hacky haha
+                    @let value = self.value.as_ref().map(|v| v.split("+").next().unwrap().to_owned());
+
+                    input
+                        id=(self.name)
+                        name=(self.name)
+                        type="datetime-local"
+                        min=[min]
+                        max=[max]
+                        step=[attrs.step]
+                        value=[value]
+                    {
+                    }
+                }
                 InputType::Number(attrs) => {
                     input
                         id=(self.name)
