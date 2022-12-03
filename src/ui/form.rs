@@ -1,15 +1,42 @@
 use maud::{html, Markup, Render};
 use sqlx::{postgres::PgRow, Error as SqlError, Row};
-use time::{macros::format_description, PrimitiveDateTime};
+use time::{macros::format_description, Date, PrimitiveDateTime};
 
 use crate::state::Column;
 
+
+#[derive(Copy, Clone)]
+struct Days(usize);
+
+impl Render for Days {
+    fn render(&self) -> Markup {
+        html! { (self.0) }
+    }
+}
+
+
+#[derive(Copy, Clone)]
+struct Seconds(usize);
+
+impl Render for Seconds {
+    fn render(&self) -> Markup {
+        html! { (self.0) }
+    }
+}
+
+
+#[derive(Default)]
+pub struct DateAttributes {
+    min: Option<Date>,
+    max: Option<Date>,
+    step: Option<Days>,
+}
 
 #[derive(Default)]
 pub struct DateTimeAttributes {
     min: Option<PrimitiveDateTime>,
     max: Option<PrimitiveDateTime>,
-    step: Option<usize>,
+    step: Option<Seconds>,
 }
 
 #[derive(Default)]
@@ -35,6 +62,7 @@ pub struct TextAreaAttributes {
 
 
 pub enum InputType {
+    Date(DateAttributes),
     DateTime(DateTimeAttributes),
     Number(NumberInputAttributes),
     Text(TextInputAttributes),
@@ -75,6 +103,8 @@ impl Field {
 impl From<&Column> for Field {
     fn from(column: &Column) -> Self {
         let input_type = match column.data_type.as_ref() {
+            "date" =>
+                InputType::Date(DateAttributes::default()),
             "int4" | "int8" =>
                 InputType::Number(NumberInputAttributes::default()),
             "text" =>
@@ -101,6 +131,22 @@ impl Render for Field {
             label for=(self.name) { (self.name) }
 
             @match &self.input_type {
+                InputType::Date(attrs) => {
+                    @let format = format_description!("[year]-[month]-[day]");
+                    @let min = attrs.min.map(|min| min.format(&format).unwrap());
+                    @let max = attrs.max.map(|max| max.format(&format).unwrap());
+
+                    input
+                        id=(self.name)
+                        name=(self.name)
+                        type="date"
+                        min=[min]
+                        max=[max]
+                        step=[attrs.step]
+                        value=[&self.value]
+                    {
+                    }
+                }
                 InputType::DateTime(attrs) => {
                     @let format = format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
                     @let min = attrs.min.map(|min| min.format(&format).unwrap());
