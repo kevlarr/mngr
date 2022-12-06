@@ -62,6 +62,7 @@ pub struct TextAreaAttributes {
 
 
 pub enum InputType {
+    Boolean,
     Date(DateAttributes),
     DateTime(DateTimeAttributes),
     Number(NumberInputAttributes),
@@ -103,6 +104,8 @@ impl Field {
 impl From<&Column> for Field {
     fn from(column: &Column) -> Self {
         let input_type = match column.data_type.as_ref() {
+            "bool" =>
+                InputType::Boolean,
             "date" =>
                 InputType::Date(DateAttributes::default()),
             "int4" | "int8" =>
@@ -131,6 +134,17 @@ impl Render for Field {
             label for=(self.name) { (self.name) }
 
             @match &self.input_type {
+                InputType::Boolean => {
+                    @let checked = self.value.as_deref() == Some("true");
+
+                    input
+                        id=(self.name)
+                        name=(self.name)
+                        type="checkbox"
+                        checked[checked]
+                    {
+                    }
+                }
                 InputType::Date(attrs) => {
                     @let format = format_description!("[year]-[month]-[day]");
                     @let min = attrs.min.map(|min| min.format(&format).unwrap());

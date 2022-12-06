@@ -29,6 +29,10 @@ c-form textarea {
   resize: vertical;
 }
 
+c-form input[type="checkbox"] {
+  align-self: flex-start;
+}
+
 c-form c-form-controls {
   display: flex;
   justify-content: center;
