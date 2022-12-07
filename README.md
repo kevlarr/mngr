@@ -4,14 +4,14 @@ Manager intends to provide basic but incredibly convenient CRUD on existing data
 
 Good for people who...
 
-* Prefer constraints and validations to live in the database
+* Prefer constraints and validations (and even object descriptions) to live in the database
 * Want to expose a simple, non-developer-friendly admin UI with zero code
 * Want a basic admin panel up and running as a placeholder for a more advanced, custom-written one later
 
 Not good for people who...
 
 * Prefer code-level validations
-* Want advanced functionality, because Manager be basic
+* Want advanced functionality, because this be basic
 
 
 ## Running

@@ -46,9 +46,10 @@ from (
         left join pg_attrdef ad on ad.adrelid = c.oid and ad.adnum = a.attnum
 
         where
-            n.nspname = 'public' and
-            c.relname != 'jrny_revisions' and
-            c.relkind = 'r' and 
+            -- Does this need to be optimized a bit..?
+            concat(n.nspname, '.', c.relname) like any($1) and
+            concat(n.nspname, '.', c.relname) not like any($2) and
+            c.relkind = 'r' and
             not a.attisdropped  and
             a.attnum > 0
 

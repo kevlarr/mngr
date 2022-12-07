@@ -10,3 +10,4 @@ maud = { version = "0.24", features = ["actix-web"] }
 serde = "1"
 sqlx = { version = "0.6", features = ["runtime-actix-rustls", "postgres", "json"] }
 time = { version = "0.3", features = ["formatting", "macros"] }
+toml = "0.5"

@@ -3,21 +3,43 @@ use std::{collections::HashMap, env};
 use serde::Deserialize;
 use sqlx::{Executor, postgres::{PgPool, PgPoolOptions}, types::Json};
 
+// TODO: Way too much happening in here
+const CONFIG: &str = r#"
+[database]
 
-/*
+# Database tables to include, either unqualified or schema-qualified.
+# Strings should be in a format compatible with `LIKE` comparisons.
+#
+# TODO: These follow same format as LIKE - should they be regex instead?
+include = [
+  "public.%",
+]
+
+# Database tables to exclude, primarily when more tables are included
+# via `LIKE` than are ultimately desired.
+exclude = [
+  "public.jrny_revision",
+]
+"#;
+
 #[derive(Clone, Debug, Deserialize)]
-pub enum Identity {
-    Null,
-    ByDefault,
-    Always,
+pub struct DatabaseConfig {
+    pub include: Vec<String>,
+    pub exclude: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
-pub enum Generated {
-    Null,
-    Stored,
+pub struct TableConfig {
+    pub schema: Option<String>,
+    pub name: String,
+    pub lookup: Option<Vec<String>>,
 }
-*/
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct Config {
+    pub database: DatabaseConfig,
+    pub tables: Vec<TableConfig>,
+}
 
 
 
@@ -35,6 +57,7 @@ pub struct ColumnRow {
 
 impl ColumnRow {
     pub fn always_generated(&self) -> bool {
+        // TODO: Serialize as enums..?
         self.identity.as_deref() == Some("always") ||
         self.identity.as_deref() == Some("stored")
     }
@@ -129,12 +152,16 @@ impl From<Vec<SchemaRow>> for Schemas {
 
 #[derive(Clone, Debug)]
 pub struct State {
+    pub config: Config,
     pub pool: PgPool,
     pub schemas: Schemas,
 }
 
 impl State {
     pub async fn new() -> Self {
+        let config: Config = toml::from_str(CONFIG).unwrap();
+
+        // TODO: From an env file or argument
         let database_url = env::var("DATABASE_URL").expect("DATABASE_URL not set");
 
         let pool = PgPoolOptions::new()
@@ -147,11 +174,21 @@ impl State {
             .await
             .unwrap();
 
-        let schemas = sqlx::query_file_as!(SchemaRow, "queries/tables.sql")
+        let schemas = sqlx::query_file_as!(
+            SchemaRow,
+            "queries/tables.sql",
+            &config.database.include,
+            &config.database.exclude
+        )
             .fetch_all(&pool)
             .await
             .unwrap();
 
-        State { pool, schemas: Schemas::from(schemas) }
+
+        State {
+            config,
+            pool,
+            schemas: Schemas::from(schemas),
+        }
     }
 }
