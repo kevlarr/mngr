@@ -144,7 +144,7 @@ create table genre (
     text
     unique
     not null
-    check (name similar to '[A-Za-z''-/]{2,20}')
+    check (name similar to '[A-Za-z''-/ ]{2,20}')
 );
 
 

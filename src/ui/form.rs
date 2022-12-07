@@ -73,6 +73,7 @@ pub enum InputType {
 
 pub struct Field {
     name: String,
+    data_type: String,
     input_type: InputType,
     value: Option<String>,
 }
@@ -120,6 +121,7 @@ impl From<&Column> for Field {
 
         Self {
             name: column.name.to_owned(),
+            data_type: column.data_type.to_owned(),
             value: None,
             input_type,
         }
@@ -141,6 +143,7 @@ impl Render for Field {
                         id=(self.name)
                         name=(self.name)
                         type="checkbox"
+                        class=(self.data_type)
                         checked[checked]
                     {
                     }
@@ -154,6 +157,7 @@ impl Render for Field {
                         id=(self.name)
                         name=(self.name)
                         type="date"
+                        class=(self.data_type)
                         min=[min]
                         max=[max]
                         step=[attrs.step]
@@ -173,6 +177,7 @@ impl Render for Field {
                         id=(self.name)
                         name=(self.name)
                         type="datetime-local"
+                        class=(self.data_type)
                         min=[min]
                         max=[max]
                         step=[attrs.step]
@@ -185,6 +190,7 @@ impl Render for Field {
                         id=(self.name)
                         name=(self.name)
                         type="number"
+                        class=(self.data_type)
                         min=[attrs.min]
                         max=[attrs.max]
                         step=[attrs.step]
@@ -197,6 +203,7 @@ impl Render for Field {
                         id=(self.name)
                         name=(self.name)
                         type="text"
+                        class=(self.data_type)
                         minlength=[attrs.minlength]
                         maxlength=[attrs.maxlength]
                         placeholder=[&attrs.placeholder]
@@ -210,6 +217,7 @@ impl Render for Field {
                     textarea
                         id=(self.name)
                         name=(self.name)
+                        class=(self.data_type)
                         maxlength=[attrs.maxlength]
                         minlength=[attrs.minlength]
                         rows=(rows)

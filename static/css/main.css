@@ -38,6 +38,10 @@ button {
   cursor: pointer;
 }
 
+code {
+  font-family: monospace;
+}
+
 table {
   border-collapse: collapse;
 }

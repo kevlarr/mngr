@@ -210,7 +210,7 @@ async fn render_records(
     // TODO: This has become a common pattern, so.. abstract. Maybe think about
     // adding this as a pre-generated field on the `Table` struct?
     let columns = table.columns.iter()
-        .map(|c| format!("{}::text", c.name))
+        .map(|c| format!("\"{}\"::text", c.name))
         .collect::<Vec<_>>()
         .join(", ");
 
@@ -227,19 +227,32 @@ async fn render_records(
         sort_direction,
     );
 
-    let rows = sqlx::query(&statement)
+    let result = sqlx::query(&statement)
         .fetch_all(&state.pool)
-        .await
-        .unwrap();
+        .await;
 
-    let ui_table = ui::table::Table::new(
-        schema_name,
-        &table.name,
-        table.columns.as_slice(),
-        rows,
-    );
+    match result {
+        Ok(rows) => {
+            let ui_table = ui::table::Table::new(
+                schema_name,
+                &table.name,
+                table.columns.as_slice(),
+                rows,
+            );
+            records_page(state, schema_name, table, html! { (ui_table) })
+        }
+        Err(e) => {
+            records_page(state, schema_name, table, html! {
+                pre {
+                    (statement)
+                }
+                pre {
+                    (format!("{:#?}", e))
+                }
+            })
+        }
+    }
 
-    records_page(state, schema_name, table, html! { (ui_table) })
 }
 
 
@@ -265,7 +278,7 @@ async fn render_edit_record(
 ) -> Markup {
     // TODO: Abstract, this is duplicate
     let columns = table.columns.iter()
-        .map(|c| format!("{}::text", c.name))
+        .map(|c| format!("\"{}\"::text", c.name))
         .collect::<Vec<_>>()
         .join(", ");
 
@@ -279,22 +292,35 @@ async fn render_edit_record(
         table.name,
     );
 
-    let row = sqlx::query(&statement)
+    let result = sqlx::query(&statement)
         .bind(record_id)
         .fetch_one(&state.pool)
-        .await
-        .unwrap();
+        .await;
 
-    let mut ui_form = ui::form::Form::from(table.columns.as_slice())
-        .method("post")
-        .action(&format!("/tables/{}/{}/records/{}/edit", schema_name, table.name, record_id))
-        .row(&row);
+    match result {
+        Ok(row) => {
+            let mut ui_form = ui::form::Form::from(table.columns.as_slice())
+                .method("post")
+                .action(&format!("/tables/{}/{}/records/{}/edit", schema_name, table.name, record_id))
+                .row(&row);
 
-    if let Some(e) = error {
-        ui_form = ui_form.error(e);
+            if let Some(e) = error {
+                ui_form = ui_form.error(e);
+            }
+
+            records_page(state, schema_name, table, html! { (ui_form ) })
+        }
+        Err(e) => {
+            records_page(state, schema_name, table, html! {
+                pre {
+                    (statement)
+                }
+                pre {
+                    (format!("{:#?}", e))
+                }
+            })
+        }
     }
-
-    records_page(state, schema_name, table, html! { (ui_form ) })
 }
 
 
