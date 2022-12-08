@@ -49,6 +49,7 @@ from (
             -- Does this need to be optimized a bit..?
             concat(n.nspname, '.', c.relname) like any($1) and
             concat(n.nspname, '.', c.relname) not like any($2) and
+            n.nspname = any(current_schemas(false)) and -- exclude implicit schemas
             c.relkind = 'r' and
             not a.attisdropped  and
             a.attnum > 0

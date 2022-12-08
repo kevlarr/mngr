@@ -1,11 +1,3 @@
 [scope]
-# Database tables to include, either unqualified or schema-qualified.
-# Strings should be in a format compatible with `LIKE` comparisons.
-include = [
-  "public.%",
-]
-
-# Database tables to exclude from the list found via above `include` patterns
-exclude = [
-  "%jrny_revision%",
-]
+include = ["%"]
+exclude = ["%jrny_revision%"]
