@@ -18,6 +18,11 @@ c-form label {
   margin-bottom: 0.5rem;
 }
 
+c-form label.required::after {
+  content: " ✱";
+  color: steelblue;
+}
+
 c-form input,
 c-form textarea {
   font-size: 1rem;

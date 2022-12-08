@@ -5,7 +5,7 @@ use time::{macros::format_description, Date, PrimitiveDateTime};
 use crate::state::Column;
 
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 struct Days(usize);
 
 impl Render for Days {
@@ -15,7 +15,7 @@ impl Render for Days {
 }
 
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 struct Seconds(usize);
 
 impl Render for Seconds {
@@ -25,42 +25,42 @@ impl Render for Seconds {
 }
 
 
-#[derive(Default)]
+#[derive(Default, PartialEq)]
 pub struct DateAttributes {
     min: Option<Date>,
     max: Option<Date>,
     step: Option<Days>,
 }
 
-#[derive(Default)]
+#[derive(Default, PartialEq)]
 pub struct DateTimeAttributes {
     min: Option<PrimitiveDateTime>,
     max: Option<PrimitiveDateTime>,
     step: Option<Seconds>,
 }
 
-#[derive(Default)]
+#[derive(Default, PartialEq)]
 pub struct NumberInputAttributes {
     min: Option<i64>,
     max: Option<i64>,
     step: Option<i64>,
 }
 
-#[derive(Default)]
+#[derive(Default, PartialEq)]
 pub struct TextInputAttributes {
     minlength: Option<i64>,
     maxlength: Option<i64>,
     placeholder: Option<String>,
 }
 
-#[derive(Default)]
+#[derive(Default, PartialEq)]
 pub struct TextAreaAttributes {
     minlength: Option<i64>,
     maxlength: Option<i64>,
     rows: Option<i64>,
 }
 
-
+#[derive(PartialEq)]
 pub enum InputType {
     Boolean,
     Date(DateAttributes),
@@ -71,14 +71,13 @@ pub enum InputType {
 }
 
 
-pub struct Field {
-    name: String,
-    data_type: String,
+pub struct Field<'a> {
+    column: &'a Column,
     input_type: InputType,
     value: Option<String>,
 }
 
-impl Field {
+impl<'a> Field<'a> {
     /*
     pub fn number(mut self, callback: fn(&mut NumberInputAttributes)) -> Self {
         let mut attrs = NumberInputAttributes::default();
@@ -102,8 +101,10 @@ impl Field {
     }
 }
 
-impl From<&Column> for Field {
-    fn from(column: &Column) -> Self {
+impl<'a, 'b: 'a> From<&'b Column> for Field<'a> {
+    fn from(column: &'b Column) -> Self {
+        // Unless these are ever individually-configured, this could simply
+        // be moved to render
         let input_type = match column.data_type.as_ref() {
             "bool" =>
                 InputType::Boolean,
@@ -120,30 +121,32 @@ impl From<&Column> for Field {
         };
 
         Self {
-            name: column.name.to_owned(),
-            data_type: column.data_type.to_owned(),
-            value: None,
+            column,
             input_type,
+            value: None,
         }
     }
 }
 
-impl Render for Field {
+impl<'a> Render for Field<'a> {
     fn render(&self) -> Markup {
         // TODO: id different from name
-        
+        let id = &self.column.name;
+        let data_type = &self.column.data_type;
+        let required = !self.column.nullable && self.input_type != InputType::Boolean;
+
         html! {
-            label for=(self.name) { (self.name) }
+            label.required[required] for=(id) { (id) }
 
             @match &self.input_type {
                 InputType::Boolean => {
                     @let checked = self.value.as_deref() == Some("true");
 
                     input
-                        id=(self.name)
-                        name=(self.name)
+                        id=(id)
+                        name=(id)
                         type="checkbox"
-                        class=(self.data_type)
+                        class=(data_type)
                         checked[checked]
                     {
                     }
@@ -154,14 +157,15 @@ impl Render for Field {
                     @let max = attrs.max.map(|max| max.format(&format).unwrap());
 
                     input
-                        id=(self.name)
-                        name=(self.name)
+                        id=(id)
+                        name=(id)
                         type="date"
-                        class=(self.data_type)
+                        class=(data_type)
                         min=[min]
                         max=[max]
                         step=[attrs.step]
                         value=[&self.value]
+                        required[required]
                     {
                     }
                 }
@@ -170,44 +174,50 @@ impl Render for Field {
                     @let min = attrs.min.map(|min| min.format(&format).unwrap());
                     @let max = attrs.max.map(|max| max.format(&format).unwrap());
 
-                    // Haha this is hacky haha
+                    // Haha this is so hacky haha
+                    //
+                    // TODO: And it doesn't always work because it can still include milliseconds,
+                    // which will not populate the input
                     @let value = self.value.as_ref().map(|v| v.split("+").next().unwrap().to_owned());
 
                     input
-                        id=(self.name)
-                        name=(self.name)
+                        id=(id)
+                        name=(id)
                         type="datetime-local"
-                        class=(self.data_type)
+                        class=(data_type)
                         min=[min]
                         max=[max]
                         step=[attrs.step]
                         value=[value]
+                        required[required]
                     {
                     }
                 }
                 InputType::Number(attrs) => {
                     input
-                        id=(self.name)
-                        name=(self.name)
+                        id=(id)
+                        name=(id)
                         type="number"
-                        class=(self.data_type)
+                        class=(data_type)
                         min=[attrs.min]
                         max=[attrs.max]
                         step=[attrs.step]
                         value=[&self.value]
+                        required[required]
                     {
                     }
                 }
                 InputType::Text(attrs) => {
                     input
-                        id=(self.name)
-                        name=(self.name)
+                        id=(id)
+                        name=(id)
                         type="text"
-                        class=(self.data_type)
+                        class=(data_type)
                         minlength=[attrs.minlength]
                         maxlength=[attrs.maxlength]
                         placeholder=[&attrs.placeholder]
                         value=[&self.value]
+                        required[required]
                     {
                     }
                 }
@@ -215,12 +225,13 @@ impl Render for Field {
                     @let rows = attrs.rows.unwrap_or(1);
 
                     textarea
-                        id=(self.name)
-                        name=(self.name)
-                        class=(self.data_type)
+                        id=(id)
+                        name=(id)
+                        class=(data_type)
                         maxlength=[attrs.maxlength]
                         minlength=[attrs.minlength]
                         rows=(rows)
+                        required[required]
                     {
                         @if let Some(value) = &self.value {
                             (value)
@@ -234,15 +245,15 @@ impl Render for Field {
 
 
 #[derive(Default)]
-pub struct Form {
+pub struct Form<'a> {
     action: Option<String>,
     error: Option<SqlError>,
-    fields: Vec<Field>,
+    fields: Vec<Field<'a>>,
     method: Option<String>,
     submit_text: Option<String>,
 }
 
-impl Form {
+impl<'a> Form<'a> {
     pub fn action(mut self, action: &str) -> Self {
         self.action = Some(action.to_owned());
         self
@@ -260,7 +271,7 @@ impl Form {
 
     pub fn row(mut self, row: &PgRow) -> Self {
         for field in &mut self.fields {
-            let value: String = row.try_get(field.name.as_str()).unwrap();
+            let value: String = row.try_get(field.column.name.as_str()).unwrap();
 
             field.value(value);
         }
@@ -268,13 +279,13 @@ impl Form {
         self
     }
 
-    fn add_field(&mut self, field: Field) {
+    fn add_field(&mut self, field: Field<'a>) {
         self.fields.push(field);
     }
 }
 
-impl From<&[Column]> for Form {
-    fn from(columns: &[Column]) -> Self {
+impl<'a, 'b: 'a> From<&'b [Column]> for Form<'a> {
+    fn from(columns: &'b [Column]) -> Self {
         let mut form = Self::default();
 
         for column in columns.iter() {
@@ -287,7 +298,7 @@ impl From<&[Column]> for Form {
     }
 }
 
-impl Render for Form {
+impl<'a> Render for Form<'a> {
     fn render(&self) -> Markup {
         let submit_text = self.submit_text.as_deref().unwrap_or("Submit");
 
