@@ -1,47 +1,34 @@
-use std::{collections::HashMap, env};
+// TODO: Way too much happening in this file
+use std::{collections::HashMap, env, fs};
 
 use serde::Deserialize;
 use sqlx::{Executor, postgres::{PgPool, PgPoolOptions}, types::Json};
 
-// TODO: Way too much happening in here
-const CONFIG: &str = r#"
-[database]
-
-# Database tables to include, either unqualified or schema-qualified.
-# Strings should be in a format compatible with `LIKE` comparisons.
-#
-# TODO: These follow same format as LIKE - should they be regex instead?
-include = [
-  "public.%",
-]
-
-# Database tables to exclude, primarily when more tables are included
-# via `LIKE` than are ultimately desired.
-exclude = [
-  "public.jrny_revision",
-]
-"#;
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct DatabaseConfig {
+pub struct ScopeConfig {
     pub include: Vec<String>,
     pub exclude: Vec<String>,
 }
 
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct TableConfig {
+    // TODO: If this is optional, there needs to be an error at application
+    // startup describing ambiguous table if there are multiple loaded from
+    // the initial state SQL query with the same name in different schemas
     pub schema: Option<String>,
-    pub name: String,
+    pub table: String,
+    pub description: Option<String>,
     pub lookup: Option<Vec<String>>,
 }
 
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct Config {
-    pub database: DatabaseConfig,
-    pub tables: Vec<TableConfig>,
+    pub scope: ScopeConfig,
+    pub tables: Option<Vec<TableConfig>>,
 }
-
-
 
 
 #[derive(Clone, Debug, Deserialize)]
@@ -159,7 +146,8 @@ pub struct State {
 
 impl State {
     pub async fn new() -> Self {
-        let config: Config = toml::from_str(CONFIG).unwrap();
+        let config = fs::read_to_string("test/mngr.toml").unwrap();
+        let config: Config = toml::from_str(&config).unwrap();
 
         // TODO: From an env file or argument
         let database_url = env::var("DATABASE_URL").expect("DATABASE_URL not set");
@@ -177,8 +165,8 @@ impl State {
         let schemas = sqlx::query_file_as!(
             SchemaRow,
             "queries/tables.sql",
-            &config.database.include,
-            &config.database.exclude
+            &config.scope.include,
+            &config.scope.exclude
         )
             .fetch_all(&pool)
             .await
