@@ -10,13 +10,12 @@ function main() {
     tr.addEventListener('click', evt => {
       if (evt.detail < 2) { return; }
 
-      let schema = tr.getAttribute('data-schema');
-      let table = tr.getAttribute('data-table');
-      let recordId = tr.getAttribute('data-record');
+      let tableOid = tr.getAttribute('data-table-oid');
+      let recordId = tr.getAttribute('data-record-id'); // FIXME: Should not be `-id` hardcoded
 
-      if (!schema || !table) { return; }
+      if (!tableOid || !recordId) { return; }
 
-      window.location.href = `/tables/${schema}/${table}/records/${recordId}/edit`;
+      window.location.href = `/tables/${tableOid}/records/${recordId}/edit`;
     })
   });
 
@@ -54,16 +53,16 @@ function toggleSortDirection(params) {
 }
 
 function setCurrentMenuLink() {
-  let rgx = /^\/tables\/([^\/]+)\/([^\/]+)/;
+  let rgx = /^\/tables\/([0-9]+)/;
   let matches = window.location.pathname.match(rgx);
-  
+
   if (!matches) { return; }
-  
-  let [_, schema, table] = matches;
-  let link = document.querySelector(`c-sidebar a[data-schema=${schema}][data-table=${table}`);
-  
+
+  let [_, tableOid] = matches;
+  let link = document.querySelector(`c-sidebar a[data-table-oid="${tableOid}"]`);
+
   if (!link) { return; }
-  
+
   link.classList.add('current', 'disabled');
 }
 

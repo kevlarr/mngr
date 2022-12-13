@@ -1,9 +1,7 @@
+use crate::db::Column;
 use maud::{html, Markup, Render};
 use sqlx::{postgres::PgRow, Error as SqlError, Row};
 use time::{macros::format_description, Date, PrimitiveDateTime};
-
-use crate::state::Column;
-
 
 #[derive(Copy, Clone, PartialEq)]
 struct Days(usize);
@@ -14,7 +12,6 @@ impl Render for Days {
     }
 }
 
-
 #[derive(Copy, Clone, PartialEq)]
 struct Seconds(usize);
 
@@ -23,7 +20,6 @@ impl Render for Seconds {
         html! { (self.0) }
     }
 }
-
 
 #[derive(Default, PartialEq)]
 pub struct DateAttributes {

@@ -1,16 +1,14 @@
-
+use crate::db;
 use maud::{html, Markup, Render};
 use sqlx::{Row, postgres::PgRow};
-
-use crate::state::Column;
 
 pub struct TableColumn {
     data_type: String,
     name: String,
 }
 
-impl From<&Column> for TableColumn {
-    fn from(column: &Column) -> Self {
+impl From<&db::Column> for TableColumn {
+    fn from(column: &db::Column) -> Self {
         Self {
             data_type: column.data_type.clone(),
             name: column.name.clone(),
@@ -18,28 +16,20 @@ impl From<&Column> for TableColumn {
     }
 }
 
-#[derive(Default)]
-pub struct Table {
-    schema_name: String,
-    table_name: String,
+pub struct Table<'a> {
+    table: &'a db::Table,
     columns: Vec<TableColumn>,
     rows: Vec<PgRow>,
 }
 
-impl Table {
-    pub fn new(
-        schema_name: &str,
-        table_name: &str,
-        columns: &[Column],
-        rows: Vec<PgRow>,
-    ) -> Self {
-        let columns = columns.iter()
+impl<'a, 'b: 'a> Table<'a> {
+    pub fn new(table: &'b db::Table, rows: Vec<PgRow>) -> Self {
+        let columns = table.columns.iter()
             .map(|c| TableColumn::from(c))
             .collect();
 
         Self {
-            schema_name: schema_name.to_owned(),
-            table_name: table_name.to_owned(),
+            table,
             columns,
             rows,
          }
@@ -49,7 +39,7 @@ impl Table {
         html! {
             @let record_id: String = row.try_get("id").unwrap();
 
-            tr data-schema=(self.schema_name) data-table=(self.table_name) data-record=(record_id) {
+            tr data-table-oid=(self.table.oid.0) data-record-id=(record_id) {
                 @for column in columns {
                     @let col_name: &str = column.name.as_ref();
                     @let value: String = row.try_get(col_name).unwrap();
@@ -70,7 +60,7 @@ impl Table {
     }
 }
 
-impl Render for Table {
+impl<'a> Render for Table<'a> {
     fn render(&self) -> Markup {
         // Places the table in a wrapper so that the wrapping container can be used
         // in flex containers, with overflow working as expected, etc.

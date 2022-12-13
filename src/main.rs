@@ -1,5 +1,3 @@
-use std::{collections::HashMap, env, io};
-
 use actix_files::Files;
 use actix_web::{
     middleware::DefaultHeaders,
@@ -12,21 +10,17 @@ use actix_web::{
     post,
 };
 use maud::{html, DOCTYPE, Markup};
+use mngr::{state::*, db, ui};
 use serde::Deserialize;
 use sqlx::Error as SqlError;
-
-use admin::{state::*, ui};
-
+use std::{collections::HashMap, env, io};
 
 const YEAR_IN_SECONDS: isize = 60 * 60 * 24 * 365;
 
-
 #[derive(Deserialize)]
 struct RecordsPath {
-    schema: String,
-    table: String,
+    table_oid: u32,
 }
-
 
 #[derive(Deserialize)]
 struct RecordsParams {
@@ -35,16 +29,15 @@ struct RecordsParams {
     sort_direction: Option<String>,
 }
 
-
 #[derive(Deserialize)]
 struct RecordPath {
-    schema: String,
-    table: String,
-    id: i64,
+    table_oid: u32,
+    record_id: i64,
 }
 
+async fn page(state: &State, content: Markup) -> Markup {
+    let schemas = mngr::db::Schemas::load(&state.pool, &state.config).await;
 
-fn page(state: &State, content: Markup) -> Markup {
     html! {
         (DOCTYPE)
         head {
@@ -55,9 +48,9 @@ fn page(state: &State, content: Markup) -> Markup {
             c-sidebar {
                 h1 { "mngr" }
                 nav {
-                    @let show_schema = state.schemas.len() > 1;
+                    @let show_schema = schemas.len() > 1;
 
-                    @for schema in state.schemas.iter() {
+                    @for schema in schemas.iter() {
                         section {
                             @if show_schema {
                                 h2 { (schema.name) }
@@ -66,9 +59,8 @@ fn page(state: &State, content: Markup) -> Markup {
                                 @for table in &schema.tables {
                                     li {
                                         a
-                                            href=(format!("/tables/{}/{}/records", schema.name, table.name))
-                                            data-schema=(schema.name)
-                                            data-table=(table.name)
+                                            href=(format!("/tables/{}/records", table.oid.0))
+                                            data-table-oid=(table.oid.0)
                                         {
                                             (table.name)
                                         }
@@ -86,11 +78,9 @@ fn page(state: &State, content: Markup) -> Markup {
     }
 }
 
-
-fn records_page(
+async fn records_page(
     state: &State,
-    schema_name: &str,
-    table: &Table,
+    table: &db::Table,
     content: Markup,
 ) -> Markup {
     page(state, html! {
@@ -98,21 +88,20 @@ fn records_page(
             h2 { (table.name) }
             menu class="tabs" {
                 li {
-                    a href=(format!("/tables/{}/{}/records", schema_name, table.name)) {
+                    a href=(format!("/tables/{}/records", table.oid.0)) {
                         "All Records"
                     }
                 }
                 li {
-                    a href=(format!("/tables/{}/{}/records/new", schema_name, table.name)) {
+                    a href=(format!("/tables/{}/records/new", table.oid.0)) {
                         "New Record"
                     }
                 }
             }
         }
         (content)
-    })
+    }).await
 }
-
 
 #[get("/debug/state")]
 async fn get_state(state: Data<State>) -> Markup {
@@ -123,74 +112,75 @@ async fn get_state(state: Data<State>) -> Markup {
     }
 }
 
-
-#[get("/tables/{schema}/{table}/records")]
+#[get("/tables/{table_oid}/records")]
 async fn get_table_records(
     path: Path<RecordsPath>,
     params: Query<RecordsParams>,
     state: Data<State>,
 ) -> Markup {
     // TODO: Implement an extractor for this
-    match state.schemas.get_table(&path.schema, &path.table) {
-        Some(table) => render_records(&state, &path.schema, table, &params).await,
-        None => not_found(&state),
+    match load_table(&state, path.table_oid).await {
+        Some(table) => render_records(&state, &table, &params).await,
+        None => not_found(&state).await,
     }
 }
 
-
-#[get("/tables/{schema}/{table}/records/new")]
+#[get("/tables/{table_oid}/records/new")]
 async fn get_table_records_new(
     path: Path<RecordsPath>,
     state: Data<State>,
 ) -> Markup {
-    match state.schemas.get_table(&path.schema, &path.table) {
-        Some(table) => render_new_record(&state, &path.schema, table, None),
-        None => not_found(&state),
+    match load_table(&state, path.table_oid).await {
+        Some(table) => render_new_record(&state, &table, None).await,
+        None => not_found(&state).await,
     }
 }
 
-#[post("/tables/{schema}/{table}/records/new")]
+#[post("/tables/{table_oid}/records/new")]
 async fn post_table_records_new(
     path: Path<RecordsPath>,
     state: Data<State>,
     form: Form<HashMap<String, String>>,
 ) -> Either<HttpResponse, Markup> {
-    match state.schemas.get_table(&path.schema, &path.table) {
-        Some(table) => create_new_record(&state, &path.schema, table, &form).await,
-        None => Either::Right(not_found(&state)),
+    match load_table(&state, path.table_oid).await {
+        Some(table) => create_new_record(&state, &table, &form).await,
+        None => Either::Right(not_found(&state).await),
     }
 }
 
-
-#[get("/tables/{schema}/{table}/records/{id}/edit")]
+#[get("/tables/{table_oid}/records/{record_id}/edit")]
 async fn get_table_record_edit(
     path: Path<RecordPath>,
     state: Data<State>,
 ) -> Markup {
-    match state.schemas.get_table(&path.schema, &path.table) {
-        Some(table) => render_edit_record(&state, &path.schema, table, path.id, None).await,
-        None => not_found(&state),
+    match load_table(&state, path.table_oid).await {
+        Some(table) => render_edit_record(&state, &table, path.record_id, None).await,
+        None => not_found(&state).await,
     }
 }
 
-
-#[post("/tables/{schema}/{table}/records/{id}/edit")]
+#[post("/tables/{table_oid}/records/{record_id}/edit")]
 async fn post_table_record_edit(
     path: Path<RecordPath>,
     state: Data<State>,
     form: Form<HashMap<String, String>>,
 ) -> Either<HttpResponse, Markup> {
-    match state.schemas.get_table(&path.schema, &path.table) {
-        Some(table) => update_record(&state, &path.schema, table, path.id, &form).await,
-        None => Either::Right(not_found(&state)),
+    match load_table(&state, path.table_oid).await {
+        Some(table) => update_record(&state, &table, path.record_id, &form).await,
+        None => Either::Right(not_found(&state).await),
     }
 }
 
+async fn load_table(
+    state: &State,
+    table_oid: u32,
+) -> Option<db::Table> {
+    db::Table::load(&state.pool, &state.config, table_oid).await
+}
 
 async fn render_records(
     state: &State,
-    schema_name: &str,
-    table: &Table,
+    table: &db::Table,
     params: &RecordsParams,
 ) -> Markup {
     let sort_column = match &params.sort_column {
@@ -214,13 +204,14 @@ async fn render_records(
         .collect::<Vec<_>>()
         .join(", ");
 
+    // TODO: Incorporate limit & pagination params
     let statement = format!(r#"
         SELECT {} FROM "{}"."{}"
         ORDER BY "{}"::{} {}
         LIMIT 50
         "#,
         columns,
-        schema_name,
+        table.schema,
         table.name,
         sort_column.name,
         sort_column.data_type,
@@ -233,46 +224,46 @@ async fn render_records(
 
     match result {
         Ok(rows) => {
-            let ui_table = ui::table::Table::new(
-                schema_name,
-                &table.name,
-                table.columns.as_slice(),
-                rows,
-            );
-            records_page(state, schema_name, table, html! { (ui_table) })
+            let ui_table = ui::table::Table::new(&table, rows);
+            records_page(state, table, html! {
+                (ui_table)
+            }).await
         }
         Err(e) => {
-            records_page(state, schema_name, table, html! {
+            records_page(state, table, html! {
                 pre {
                     (statement)
                 }
                 pre {
                     (format!("{:#?}", e))
                 }
-            })
+            }).await
         }
     }
 
 }
 
 
-fn render_new_record(state: &State, schema_name: &str, table: &Table, error: Option<SqlError>) -> Markup {
+async fn render_new_record(
+    state: &State,
+    table: &db::Table,
+    error: Option<SqlError>,
+) -> Markup {
     let mut ui_form = ui::form::Form::from(table.columns.as_slice())
         .method("post")
-        .action(&format!("/tables/{}/{}/records/new", schema_name, table.name));
+        .action(&format!("/tables/{}/records/new", table.oid.0));
 
     if let Some(e) = error {
         ui_form = ui_form.error(e);
     }
 
-    records_page(state, schema_name, table, html! { (ui_form ) })
+    records_page(state, table, html! { (ui_form ) }).await
 }
 
 
 async fn render_edit_record(
     state: &State,
-    schema_name: &str,
-    table: &Table,
+    table: &db::Table,
     record_id: i64, // TODO: Dynamic primary key column, not just "id"
     error: Option<SqlError>,
 ) -> Markup {
@@ -288,7 +279,7 @@ async fn render_edit_record(
         WHERE id = $1
         "#,
         columns,
-        schema_name,
+        table.schema,
         table.name,
     );
 
@@ -301,24 +292,26 @@ async fn render_edit_record(
         Ok(row) => {
             let mut ui_form = ui::form::Form::from(table.columns.as_slice())
                 .method("post")
-                .action(&format!("/tables/{}/{}/records/{}/edit", schema_name, table.name, record_id))
+                .action(&format!("/tables/{}/records/{}/edit", table.oid.0, record_id))
                 .row(&row);
 
             if let Some(e) = error {
                 ui_form = ui_form.error(e);
             }
 
-            records_page(state, schema_name, table, html! { (ui_form ) })
+            records_page(state, table, html! {
+                (ui_form)
+            }).await
         }
         Err(e) => {
-            records_page(state, schema_name, table, html! {
+            records_page(state, table, html! {
                 pre {
                     (statement)
                 }
                 pre {
                     (format!("{:#?}", e))
                 }
-            })
+            }).await
         }
     }
 }
@@ -326,8 +319,7 @@ async fn render_edit_record(
 
 async fn create_new_record(
     state: &State,
-    schema_name: &str,
-    table: &Table,
+    table: &db::Table,
     form_data: &HashMap<String, String>,
 ) -> Either<HttpResponse, Markup> {
     let mut columns = Vec::new();
@@ -352,7 +344,7 @@ async fn create_new_record(
         INSERT INTO "{}"."{}" ({})
             VALUES ({})
         "#,
-        schema_name,
+        table.schema,
         table.name,
         columns.join(", "),
         bind_variables.join(", "),
@@ -366,18 +358,17 @@ async fn create_new_record(
 
     match query.execute(&state.pool).await {
         Ok(_) => Either::Left(HttpResponse::SeeOther()
-            .insert_header(("Location", format!("/tables/{}/{}/records", schema_name, table.name).as_str()))
+            .insert_header(("Location", format!("/tables/{}/records", table.oid.0).as_str()))
             .finish()
         ),
-        Err(e) => Either::Right(render_new_record(state, schema_name, table, Some(e)))
+        Err(e) => Either::Right(render_new_record(state, table, Some(e)).await)
     }
 }
 
 
 async fn update_record(
     state: &State,
-    schema_name: &str,
-    table: &Table,
+    table: &db::Table,
     record_id: i64,
     form_data: &HashMap<String, String>,
 ) -> Either<HttpResponse, Markup> {
@@ -397,7 +388,7 @@ async fn update_record(
     let statement = format!(r#"
         UPDATE "{}"."{}" SET {} WHERE id = ${}
         "#,
-        schema_name,
+        table.schema,
         table.name,
         props.join(", "),
         keys.len() + 1,
@@ -413,20 +404,20 @@ async fn update_record(
 
     match query.execute(&state.pool).await {
         Ok(_) => Either::Left(HttpResponse::SeeOther()
-            .insert_header(("Location", format!("/tables/{}/{}/records/{}/edit", schema_name, table.name, record_id).as_str()))
+            .insert_header(("Location", format!("/tables/{}/records/{}/edit", table.oid.0, record_id).as_str()))
             .finish()),
 
-        // TODO: This shouldn't use same 'edit' function because it reloads the record
+        // FIXME: This shouldn't use same 'edit' function because it reloads the record
         // and loses all form data
-        Err(e) => Either::Right(render_edit_record(state, schema_name, table, record_id, Some(e)).await)
+        Err(e) => Either::Right(render_edit_record(state, table, record_id, Some(e)).await)
     }
 }
 
 
-fn not_found(state: &State) -> Markup {
+async fn not_found(state: &State) -> Markup {
     page(state, html! {
         h1 { "Not found" }
-    })
+    }).await
 }
 
 
