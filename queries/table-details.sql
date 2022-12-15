@@ -25,49 +25,68 @@ select
     tbl.oid,
     tbl.relname as "name",
     tbl.nspname as "schema",
-
-    array_agg(jsonb_build_object(
-        'data_type', typname,
-        'expression', pg_get_expr(adbin, adrelid),
-        'generated', case
-            when attgenerated = 's' then 'stored'
-        end,
-        'identity', case
-            when attidentity = 'a' then 'always'
-            when attidentity = 'd' then 'default'
-        end,
-        'name', attname,
-        'nullable', not attnotnull,
-        'position', attnum
-    )) as "columns!:Vec<Column>"
+    col.columns as "columns!:Vec<Column>",
+    con.constraints as "constraints!:Vec<Constraint>"
 
 from tbl
+
 join (
     select
-        att.attname,
-        att.attnum,
-        att.attnotnull,
-        att.attidentity,
-        att.attgenerated,
-        typ.typname,
-        def.adbin,
-        def.adrelid
+        array_agg(jsonb_build_object(
+            'data_type', typ.typname,
+            'expression', pg_get_expr(def.adbin, def.adrelid),
+            'generated', case att.attgenerated
+                when 's' then 'stored'
+            end,
+            'identity', case att.attidentity
+                when 'a' then 'always'
+                when 'd' then 'default'
+            end,
+            'name', att.attname,
+            'nullable', not att.attnotnull,
+            'position', att.attnum
+        ) order by att.attnum) as columns
 
     from      tbl
     join      pg_attribute att on att.attrelid = tbl.oid
-    join      pg_type      typ on typ.oid      = att.atttypid
-    left join pg_attrdef   def on def.adrelid  = tbl.oid and def.adnum = att.attnum
+    join      pg_type      typ on att.atttypid = typ.oid
+    left join pg_attrdef   def on att.attrelid = def.adrelid and def.adnum = att.attnum
 
     where
         not att.attisdropped and
         att.attnum > 0
+) col on true
 
-    order by att.attnum
-) q2 on true
+join (
+    select
+        array_agg(jsonb_build_object(
+            'name', con.conname,
+            'columns', con.conkey,
+            'constraint_type', case con.contype
+                when 'c' then 'check'
+                when 'f' then 'foreign_key'
+                when 'p' then 'primary_key'
+                when 'u' then 'unique'
+                when 't' then 'constraint_trigger'
+                when 'x' then 'exclusion'
+            end,
+            'expression', pg_get_constraintdef(con.oid),
+            'foreign_ref', case
+                when con.confrelid = 0 then null
+                else jsonb_build_object(
+                    -- An oid type is coerced to text by default when building a jsonb object
+                    'oid', con.confrelid::integer,
+                    'match_type', case con.confmatchtype
+                        when 'f' then 'full'
+                        when 'p' then 'partial'
+                        when 's' then 'simple'
+                    end,
+                    'columns', con.confkey
+                )
+            end
+        )) as constraints
 
-group by
-    tbl.oid,
-    tbl.relname,
-    tbl.nspname
+    from tbl
+    join pg_constraint con on con.conrelid = tbl.oid
+) con on true
 ;
-

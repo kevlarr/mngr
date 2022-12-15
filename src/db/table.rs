@@ -8,15 +8,17 @@ use sqlx::{
     types::Json,
 };
 
+pub type Position = i32;
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct ColumnValue {
-    pub name: String,
     pub data_type: String,
-    pub position: i32,
-    pub nullable: bool,
-    pub identity: Option<String>,
-    pub generated: Option<String>,
     pub expression: Option<String>,
+    pub generated: Option<String>,
+    pub identity: Option<String>,
+    pub name: String,
+    pub nullable: bool,
+    pub position: Position,
 }
 
 impl ColumnValue {
@@ -27,11 +29,40 @@ impl ColumnValue {
     }
 }
 
+#[derive(Clone, Debug, Deserialize)]
+pub struct ForeignRef {
+    pub oid: Oid,
+    pub columns: Vec<Position>,
+    // TODO: This as well?
+    // when 'f' then 'full'
+    // when 'p' then 'partial'
+    // when 's' then 'simple'
+    pub match_type: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct ConstraintValue {
+    pub name: String,
+    pub columns: Vec<Position>,
+    // TODO: Can this be deserialized to an enum?
+    // when 'c' then 'check'
+    // when 'f' then 'foreign_key'
+    // when 'p' then 'primary_key'
+    // when 'u' then 'unique'
+    // when 't' then 'constraint_trigger'
+    // when 'x' then 'exclusion'
+    pub constraint_type: String,
+    pub expression: Option<String>,
+    pub foreign_ref: Option<ForeignRef>,
+}
+
 pub type Column = Json<ColumnValue>;
+pub type Constraint = Json<ConstraintValue>;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Table {
     pub columns: Vec<Column>,
+    pub constraints: Vec<Constraint>,
     pub name: String,
     pub oid: Oid,
     pub schema: String,
