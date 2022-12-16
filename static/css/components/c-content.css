@@ -11,6 +11,13 @@ c-content > header {
   padding-bottom: 0;
 }
 
+c-content > header .description {
+  border-bottom: 1px solid darkgray;
+  color: gainsboro;
+  font-size: 0.85rem;
+  padding: 0 2rem 0.5rem 2rem;
+}
+
 c-content > header menu {
   margin: 0;
   padding: 0;

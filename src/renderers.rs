@@ -4,7 +4,7 @@ use crate::{
     db,
     routes::{RecordsParams},
     state::State,
-    ui,
+    ui::{self, utils::render_markdown},
 };
 use sqlx::Error as SqlError;
 use std::collections::HashMap;
@@ -60,6 +60,11 @@ pub async fn records_page(
     page(state, html! {
         header {
             h2 { (table.name) }
+            @if let Some(comment) = &table.comment {
+                .description {
+                    (render_markdown(comment))
+                }
+            }
             menu class="tabs" {
                 li {
                     a href=(format!("/tables/{}/records", table.oid.0)) {

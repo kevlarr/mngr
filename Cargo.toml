@@ -7,6 +7,7 @@ edition = "2021"
 actix-files = "0.6"
 actix-web = "4.2"
 maud = { version = "0.24", features = ["actix-web"] }
+pulldown-cmark = "0.9"
 serde = "1"
 sqlx = { version = "0.6", features = ["runtime-actix-rustls", "postgres", "json"] }
 time = { version = "0.3", features = ["formatting", "macros"] }

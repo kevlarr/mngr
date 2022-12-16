@@ -96,6 +96,7 @@ impl<'de> Deserialize<'de> for GeneratedColumn {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct ColumnValue {
+    pub comment: Option<String>,
     pub data_type: String,
     pub expression: Option<String>,
     pub generated: Option<GeneratedColumn>,
@@ -136,6 +137,7 @@ pub type Constraint = Json<ConstraintValue>;
 #[derive(Clone, Debug, Deserialize)]
 pub struct Table {
     pub columns: Vec<Column>,
+    pub comment: Option<String>,
     pub constraints: Vec<Constraint>,
     pub name: String,
     pub oid: Oid,

@@ -1,4 +1,7 @@
-use crate::db::Column;
+use crate::{
+    db::Column,
+    ui::utils::render_markdown,
+};
 use maud::{html, Markup, Render};
 use sqlx::{postgres::PgRow, Error as SqlError, Row};
 use time::{macros::format_description, Date, PrimitiveDateTime};
@@ -233,6 +236,12 @@ impl<'a> Render for Field<'a> {
                             (value)
                         }
                     }
+                }
+            }
+
+            @if let Some(comment) = &self.column.comment {
+                .description {
+                    (render_markdown(comment))
                 }
             }
         }

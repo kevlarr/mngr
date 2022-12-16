@@ -25,6 +25,7 @@ select
     tbl.oid,
     tbl.relname as "name",
     tbl.nspname as "schema",
+    obj_description(tbl.oid, 'pg_class') as comment,
     col.columns as "columns!:Vec<Column>",
     con.constraints as "constraints!:Vec<Constraint>"
 
@@ -33,6 +34,7 @@ from tbl
 join (
     select
         array_agg(jsonb_build_object(
+            'comment', col_description(tbl.oid, att.attnum),
             'data_type', typ.typname,
             'expression', pg_get_expr(def.adbin, def.adrelid),
             'generated', case att.attgenerated
@@ -68,7 +70,7 @@ join (
             'foreign_ref', case
                 when con.confrelid = 0 then null
                 else jsonb_build_object(
-                    -- An oid type is coerced to text by default when building a jsonb object
+                    -- An oid type is cast to text by default when building a jsonb object
                     'oid', con.confrelid::integer,
                     'match_type', con.confmatchtype,
                     'columns', con.confkey
