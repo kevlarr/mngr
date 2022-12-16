@@ -36,11 +36,12 @@ join (
             'data_type', typ.typname,
             'expression', pg_get_expr(def.adbin, def.adrelid),
             'generated', case att.attgenerated
-                when 's' then 'stored'
+                when '' then null
+                else att.attgenerated
             end,
             'identity', case att.attidentity
-                when 'a' then 'always'
-                when 'd' then 'default'
+                when '' then null
+                else att.attidentity
             end,
             'name', att.attname,
             'nullable', not att.attnotnull,
@@ -62,25 +63,14 @@ join (
         array_agg(jsonb_build_object(
             'name', con.conname,
             'columns', con.conkey,
-            'constraint_type', case con.contype
-                when 'c' then 'check'
-                when 'f' then 'foreign_key'
-                when 'p' then 'primary_key'
-                when 'u' then 'unique'
-                when 't' then 'constraint_trigger'
-                when 'x' then 'exclusion'
-            end,
+            'constraint_type', con.contype,
             'expression', pg_get_constraintdef(con.oid),
             'foreign_ref', case
                 when con.confrelid = 0 then null
                 else jsonb_build_object(
                     -- An oid type is coerced to text by default when building a jsonb object
                     'oid', con.confrelid::integer,
-                    'match_type', case con.confmatchtype
-                        when 'f' then 'full'
-                        when 'p' then 'partial'
-                        when 's' then 'simple'
-                    end,
+                    'match_type', con.confmatchtype,
                     'columns', con.confkey
                 )
             end

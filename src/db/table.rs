@@ -1,5 +1,5 @@
 use crate::Config;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use sqlx::{
     postgres::{
         types::Oid,
@@ -10,12 +10,96 @@ use sqlx::{
 
 pub type Position = i32;
 
+#[derive(Clone, Debug)]
+pub enum ForeignKeyMatchType {
+    Full,
+    Partial,
+    Simple,
+}
+
+impl<'de> Deserialize<'de> for ForeignKeyMatchType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where D: Deserializer<'de>
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(match s.as_str() {
+            "f" => Self::Full,
+            "p" => Self::Partial,
+            "s" => Self::Simple,
+            t => panic!("Unexpected foreign key match type `{}`", t)
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum ConstraintType {
+    Check,
+    Exclusion,
+    ForeignKey,
+    PrimaryKey,
+    Trigger,
+    Unique,
+}
+
+impl<'de> Deserialize<'de> for ConstraintType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where D: Deserializer<'de>
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(match s.as_str() {
+            "c" => Self::Check,
+            "f" => Self::ForeignKey,
+            "p" => Self::PrimaryKey,
+            "t" => Self::Trigger,
+            "u" => Self::Unique,
+            "x" => Self::Exclusion,
+            t => panic!("Unexpected constraint type `{}`", t)
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum IdentityColumn {
+    AlwaysGenerated,
+    GeneratedByDefault,
+}
+
+impl<'de> Deserialize<'de> for IdentityColumn {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where D: Deserializer<'de>
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(match s.as_str() {
+            "a" => Self::AlwaysGenerated,
+            "d" => Self::GeneratedByDefault,
+            i => panic!("Unexpected identity value `{:?}`", i)
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum GeneratedColumn {
+    Stored,
+}
+
+impl<'de> Deserialize<'de> for GeneratedColumn {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where D: Deserializer<'de>
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(match s.as_str() {
+            "s" => Self::Stored,
+            g => panic!("Unexpected generated value `{:?}`", g)
+        })
+    }
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct ColumnValue {
     pub data_type: String,
     pub expression: Option<String>,
-    pub generated: Option<String>,
-    pub identity: Option<String>,
+    pub generated: Option<GeneratedColumn>,
+    pub identity: Option<IdentityColumn>,
     pub name: String,
     pub nullable: bool,
     pub position: Position,
@@ -24,34 +108,24 @@ pub struct ColumnValue {
 impl ColumnValue {
     pub fn always_generated(&self) -> bool {
         // TODO: Serialize as enums..?
-        self.identity.as_deref() == Some("always") ||
-        self.identity.as_deref() == Some("stored")
+        self.identity == Some(IdentityColumn::AlwaysGenerated) ||
+        self.generated == Some(GeneratedColumn::Stored)
     }
 }
+
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct ForeignRef {
     pub oid: Oid,
     pub columns: Vec<Position>,
-    // TODO: This as well?
-    // when 'f' then 'full'
-    // when 'p' then 'partial'
-    // when 's' then 'simple'
-    pub match_type: String,
+    pub match_type: ForeignKeyMatchType,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct ConstraintValue {
     pub name: String,
     pub columns: Vec<Position>,
-    // TODO: Can this be deserialized to an enum?
-    // when 'c' then 'check'
-    // when 'f' then 'foreign_key'
-    // when 'p' then 'primary_key'
-    // when 'u' then 'unique'
-    // when 't' then 'constraint_trigger'
-    // when 'x' then 'exclusion'
-    pub constraint_type: String,
+    pub constraint_type: ConstraintType,
     pub expression: Option<String>,
     pub foreign_ref: Option<ForeignRef>,
 }
