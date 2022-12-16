@@ -112,6 +112,10 @@ impl ColumnValue {
         self.identity == Some(IdentityColumn::AlwaysGenerated) ||
         self.generated == Some(GeneratedColumn::Stored)
     }
+
+    pub fn required(&self) -> bool {
+        !self.nullable && self.expression.is_none()
+    }
 }
 
 

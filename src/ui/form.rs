@@ -132,7 +132,7 @@ impl<'a> Render for Field<'a> {
         // TODO: id different from name
         let id = &self.column.name;
         let data_type = &self.column.data_type;
-        let required = !self.column.nullable && self.input_type != InputType::Boolean;
+        let required = self.column.required() && self.input_type != InputType::Boolean;
 
         html! {
             label.required[required] for=(id) { (id) }
