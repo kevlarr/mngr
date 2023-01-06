@@ -28,6 +28,8 @@ pub struct RecordPath {
     pub record_id: i64,
 }
 
+
+
 #[get("/debug/state")]
 pub async fn get_state(state: Data<State>) -> Markup {
     let state = format!("{:#?}", state);
@@ -42,10 +44,10 @@ pub async fn get_table_debug(
     path: Path<RecordsPath>,
     state: Data<State>,
  ) -> Markup {
-    match load_table(&state, path.table_oid).await {
-        Some(table) => records_page(&state, &table, html! {
+    match table_with_constraints(&state, path.table_oid).await {
+        Some(tc) => records_page(&state, &tc, html! {
             pre {
-                (format!("{:#?}", table))
+                (format!("{:#?}", tc))
             }
         }).await,
         None => not_found(&state).await,
@@ -59,8 +61,8 @@ pub async fn get_table_records(
     state: Data<State>,
 ) -> Markup {
     // TODO: Implement an extractor for this
-    match load_table(&state, path.table_oid).await {
-        Some(table) => render_records(&state, &table, &params).await,
+    match table_with_constraints(&state, path.table_oid).await {
+        Some(tc) => render_records(&state, &tc, &params).await,
         None => not_found(&state).await,
     }
 }
@@ -70,8 +72,8 @@ pub async fn get_table_records_new(
     path: Path<RecordsPath>,
     state: Data<State>,
 ) -> Markup {
-    match load_table(&state, path.table_oid).await {
-        Some(table) => render_new_record(&state, &table, None).await,
+    match table_with_constraints(&state, path.table_oid).await {
+        Some(tc) => render_new_record(&state, &tc, None).await,
         None => not_found(&state).await,
     }
 }
@@ -82,8 +84,8 @@ pub async fn post_table_records_new(
     state: Data<State>,
     form: Form<HashMap<String, String>>,
 ) -> Either<HttpResponse, Markup> {
-    match load_table(&state, path.table_oid).await {
-        Some(table) => create_new_record(&state, &table, &form).await,
+    match table_with_constraints(&state, path.table_oid).await {
+        Some(tc) => create_new_record(&state, &tc, &form).await,
         None => Either::Right(not_found(&state).await),
     }
 }
@@ -93,8 +95,8 @@ pub async fn get_table_record_edit(
     path: Path<RecordPath>,
     state: Data<State>,
 ) -> Markup {
-    match load_table(&state, path.table_oid).await {
-        Some(table) => render_edit_record(&state, &table, path.record_id, None).await,
+    match table_with_constraints(&state, path.table_oid).await {
+        Some(tc) => render_edit_record(&state, &tc, path.record_id, None).await,
         None => not_found(&state).await,
     }
 }
@@ -105,13 +107,13 @@ pub async fn post_table_record_edit(
     state: Data<State>,
     form: Form<HashMap<String, String>>,
 ) -> Either<HttpResponse, Markup> {
-    match load_table(&state, path.table_oid).await {
-        Some(table) => update_record(&state, &table, path.record_id, &form).await,
+    match table_with_constraints(&state, path.table_oid).await {
+        Some(tc) => update_record(&state, &tc, path.record_id, &form).await,
         None => Either::Right(not_found(&state).await),
     }
 }
 
-async fn load_table(
+async fn table_with_constraints(
     state: &State,
     table_oid: u32,
 ) -> Option<db::Table> {

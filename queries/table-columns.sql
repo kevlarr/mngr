@@ -26,8 +26,7 @@ select
     tbl.relname as "name",
     tbl.nspname as "schema",
     obj_description(tbl.oid, 'pg_class') as comment,
-    col.columns as "columns!:Vec<Column>",
-    con.constraints as "constraints!:Vec<Constraint>"
+    col.columns as "columns!:Vec<Column>"
 
 from tbl
 
@@ -59,26 +58,4 @@ join (
         not att.attisdropped and
         att.attnum > 0
 ) col on true
-
-join (
-    select
-        array_agg(jsonb_build_object(
-            'name', con.conname,
-            'columns', con.conkey,
-            'constraint_type', con.contype,
-            'expression', pg_get_constraintdef(con.oid),
-            'foreign_ref', case
-                when con.confrelid = 0 then null
-                else jsonb_build_object(
-                    -- An oid type is cast to text by default when building a jsonb object
-                    'oid', con.confrelid::integer,
-                    'match_type', con.confmatchtype,
-                    'columns', con.confkey
-                )
-            end
-        )) as constraints
-
-    from tbl
-    join pg_constraint con on con.conrelid = tbl.oid
-) con on true
 ;

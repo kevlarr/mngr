@@ -1,9 +1,10 @@
 use crate::{
-    db::Column,
+    db::table::{Column, Constraints, Table, TableWithConstraints},
     ui::utils::render_markdown,
 };
 use maud::{html, Markup, Render};
 use sqlx::{postgres::PgRow, Error as SqlError, Row};
+use std::collections::HashMap;
 use time::{macros::format_description, Date, PrimitiveDateTime};
 
 #[derive(Copy, Clone, PartialEq)]
@@ -248,17 +249,27 @@ impl<'a> Render for Field<'a> {
     }
 }
 
-
-#[derive(Default)]
-pub struct Form<'a> {
+pub struct Form<'row, 'tbl> {
     action: Option<String>,
     error: Option<SqlError>,
-    fields: Vec<Field<'a>>,
     method: Option<String>,
+    row: Option<&'row PgRow>,
     submit_text: Option<String>,
+    table: &'tbl TableWithConstraints,
 }
 
-impl<'a> Form<'a> {
+impl<'row, 'tbl> Form<'row, 'tbl> {
+    pub fn new(table: &'tbl TableWithConstraints) -> Self {
+        Self {
+            action: None,
+            error: None,
+            method: None,
+            row: None,
+            submit_text: None,
+            table,
+        }
+    }
+
     pub fn action(mut self, action: &str) -> Self {
         self.action = Some(action.to_owned());
         self
@@ -274,43 +285,39 @@ impl<'a> Form<'a> {
         self
     }
 
-    pub fn row(mut self, row: &PgRow) -> Self {
-        for field in &mut self.fields {
-            let value: String = row.try_get(field.column.name.as_str()).unwrap();
-
-            field.value(value);
-        }
-
+    pub fn row(mut self, row: &'row PgRow) -> Self {
+        self.row = Some(row);
         self
     }
-
-    fn add_field(&mut self, field: Field<'a>) {
-        self.fields.push(field);
-    }
 }
 
-impl<'a, 'b: 'a> From<&'b [Column]> for Form<'a> {
-    fn from(columns: &'b [Column]) -> Self {
-        let mut form = Self::default();
-
-        for column in columns.iter() {
-            if column.always_generated() { continue; }
-
-            form.add_field(Field::from(column));
-        }
-
-        form
-    }
-}
-
-impl<'a> Render for Form<'a> {
+impl<'a, 'b> Render for Form<'a, 'b> {
     fn render(&self) -> Markup {
         let submit_text = self.submit_text.as_deref().unwrap_or("Submit");
+
+        let mut fields = Vec::new();
+
+        for column in self.table.table.columns.iter() {
+            if column.always_generated() { continue; }
+
+            let mut field = Field::from(column);
+
+            if let Some(row) = &self.row {
+                let value: String = row.try_get(column.name.as_str()).unwrap();
+                field.value(value);
+            }
+
+            // Look for single-column constraints for the field
+
+            fields.push(field);
+        }
+
+        // TODO: Render any table constraints
 
         html! {
             c-form {
                 form method=[&self.method] action=[&self.action] {
-                    @for field in &self.fields {
+                    @for field in &fields {
                         c-form-field { (field) }
                     }
                     c-form-controls {

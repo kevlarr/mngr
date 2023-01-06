@@ -159,7 +159,7 @@ pub async fn render_new_record(
     table: &db::Table,
     error: Option<SqlError>,
 ) -> Markup {
-    let mut ui_form = ui::form::Form::from(table.columns.as_slice())
+    let mut ui_form = ui::form::Form::new(table)
         .method("post")
         .action(&format!("/tables/{}/records/new", table.oid.0));
 
@@ -199,7 +199,7 @@ pub async fn render_edit_record(
 
     match result {
         Ok(row) => {
-            let mut ui_form = ui::form::Form::from(table.columns.as_slice())
+            let mut ui_form = ui::form::Form::new(table)
                 .method("post")
                 .action(&format!("/tables/{}/records/{}/edit", table.oid.0, record_id))
                 .row(&row);

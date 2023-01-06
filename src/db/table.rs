@@ -1,4 +1,5 @@
-use crate::Config;
+use std::collections::HashMap;
+
 use serde::{Deserialize, Deserializer};
 use sqlx::{
     postgres::{
@@ -7,6 +8,8 @@ use sqlx::{
     },
     types::Json,
 };
+
+use crate::Config;
 
 pub type Position = i32;
 
@@ -108,7 +111,6 @@ pub struct ColumnValue {
 
 impl ColumnValue {
     pub fn always_generated(&self) -> bool {
-        // TODO: Serialize as enums..?
         self.identity == Some(IdentityColumn::AlwaysGenerated) ||
         self.generated == Some(GeneratedColumn::Stored)
     }
@@ -117,7 +119,6 @@ impl ColumnValue {
         !self.nullable && self.expression.is_none()
     }
 }
-
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct ForeignRef {
@@ -135,24 +136,35 @@ pub struct ConstraintValue {
     pub foreign_ref: Option<ForeignRef>,
 }
 
+impl ConstraintValue {
+    pub fn column_constraint(&self) -> bool {
+        self.columns.len() == 1
+    }
+
+    pub fn table_constraint(&self) -> bool {
+        self.columns.len() > 1
+    }
+}
+
 pub type Column = Json<ColumnValue>;
-pub type Constraint = Json<ConstraintValue>;
+// pub type Constraint = Json<ConstraintValue>;
+pub type ColumnConstraints = Json<HashMap<String, Vec<ConstraintValue>>>;
+
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Table {
     pub columns: Vec<Column>,
     pub comment: Option<String>,
-    pub constraints: Vec<Constraint>,
     pub name: String,
     pub oid: Oid,
     pub schema: String,
 }
 
 impl Table {
-    pub async fn load(pool: &PgPool, config: &Config, oid: u32) -> Option<Table> {
+    pub async fn load(pool: &PgPool, config: &Config, oid: u32) -> Option<Self> {
         sqlx::query_file_as!(
-            Table,
-            "queries/table-details.sql",
+            Self,
+            "queries/table-columns.sql",
             &config.scope.include,
             &config.scope.exclude,
             Oid(oid)
@@ -160,5 +172,45 @@ impl Table {
             .fetch_optional(pool)
             .await
             .unwrap()
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct Constraints {
+    pub table_oid: Oid,
+    pub column_constraints: ColumnConstraints,
+}
+
+impl Constraints {
+    pub async fn load(pool: &PgPool, config: &Config, oid: u32) -> Option<Self> {
+        sqlx::query_file_as!(
+            Self,
+            "queries/table-constraints.sql",
+            &config.scope.include,
+            &config.scope.exclude,
+            Oid(oid)
+        )
+            .fetch_optional(pool)
+            .await
+            .unwrap()
+    }
+}
+
+// TODO: Not loving this, ripe for refactor
+#[derive(Debug)]
+pub struct TableWithConstraints {
+    pub table: Table,
+    pub constraints: Constraints,
+}
+
+impl TableWithConstraints {
+    pub async fn load(pool: &PgPool, config: &Config, oid: u32) -> Option<Self> {
+        let table = Table::load(pool, config, oid).await;
+        let constraints = Constraints::load(pool, config, oid).await;
+
+        match (table, constraints) {
+            (Some(t), Some(c)) => Some(TableWithConstraints { table: t, constraints: c }),
+            _ => None,
+        }
     }
 }
