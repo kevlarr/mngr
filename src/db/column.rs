@@ -4,6 +4,7 @@ use sqlx::{
         types::Oid,
         PgPool,
     },
+    FromRow,
     Type as SqlType,
 };
 
@@ -24,7 +25,7 @@ pub enum Generated {
 }
 
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, FromRow)]
 pub struct Column {
     pub data_type: String,
     pub description: Option<String>,

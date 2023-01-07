@@ -5,7 +5,7 @@ use sqlx::postgres::{
 };
 
 use crate::Config;
-use super::Column;
+use super::{Column, ConstraintSet};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Meta {
@@ -34,13 +34,15 @@ impl Meta {
 pub struct Table {
     pub meta: Meta,
     pub columns: Vec<Column>,
+    pub constraints: Vec<ConstraintSet>,
 }
 
 impl Table {
     pub async fn load(pool: &PgPool, config: &Config, oid: u32) -> Option<Self> {
         let meta = Meta::load(pool, config, oid).await?;
         let columns = Column::load(pool, oid).await;
+        let constraints = ConstraintSet::load(pool, oid).await;
 
-        Some(Self { meta, columns })
+        Some(Self { meta, columns, constraints })
     }
 }
