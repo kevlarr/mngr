@@ -1,11 +1,11 @@
-use crate::{
-    db::table::{Column, Constraints, Table, TableWithConstraints},
-    ui::utils::render_markdown,
-};
 use maud::{html, Markup, Render};
 use sqlx::{postgres::PgRow, Error as SqlError, Row};
-use std::collections::HashMap;
 use time::{macros::format_description, Date, PrimitiveDateTime};
+
+use crate::{
+    db::{Column, Table},
+    ui::utils::render_markdown,
+};
 
 #[derive(Copy, Clone, PartialEq)]
 struct Days(usize);
@@ -240,7 +240,7 @@ impl<'a> Render for Field<'a> {
                 }
             }
 
-            @if let Some(comment) = &self.column.comment {
+            @if let Some(comment) = &self.column.description {
                 .description {
                     (render_markdown(comment))
                 }
@@ -255,11 +255,11 @@ pub struct Form<'row, 'tbl> {
     method: Option<String>,
     row: Option<&'row PgRow>,
     submit_text: Option<String>,
-    table: &'tbl TableWithConstraints,
+    table: &'tbl Table,
 }
 
 impl<'row, 'tbl> Form<'row, 'tbl> {
-    pub fn new(table: &'tbl TableWithConstraints) -> Self {
+    pub fn new(table: &'tbl Table) -> Self {
         Self {
             action: None,
             error: None,
@@ -297,7 +297,7 @@ impl<'a, 'b> Render for Form<'a, 'b> {
 
         let mut fields = Vec::new();
 
-        for column in self.table.table.columns.iter() {
+        for column in self.table.columns.iter() {
             if column.always_generated() { continue; }
 
             let mut field = Field::from(column);

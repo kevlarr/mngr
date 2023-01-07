@@ -1,7 +1,7 @@
 use actix_web::{Either, HttpResponse};
 use maud::{html, DOCTYPE, Markup};
 use crate::{
-    db,
+    db::{Schemas, Table},
     routes::{RecordsParams},
     state::State,
     ui::{self, utils::render_markdown},
@@ -10,7 +10,7 @@ use sqlx::Error as SqlError;
 use std::collections::HashMap;
 
 pub async fn page(state: &State, content: Markup) -> Markup {
-    let schemas = db::Schemas::load(&state.pool, &state.config).await;
+    let schemas = Schemas::load(&state.pool, &state.config).await;
 
     html! {
         (DOCTYPE)
@@ -54,30 +54,30 @@ pub async fn page(state: &State, content: Markup) -> Markup {
 
 pub async fn records_page(
     state: &State,
-    table: &db::Table,
+    table: &Table,
     content: Markup,
 ) -> Markup {
     page(state, html! {
         header {
-            h2 { (table.name) }
-            @if let Some(comment) = &table.comment {
+            h2 { (table.meta.name) }
+            @if let Some(comment) = &table.meta.description {
                 .description {
                     (render_markdown(comment))
                 }
             }
             menu class="tabs" {
                 li {
-                    a href=(format!("/tables/{}/records", table.oid.0)) {
+                    a href=(format!("/tables/{}/records", table.meta.oid.0)) {
                         "All Records"
                     }
                 }
                 li {
-                    a href=(format!("/tables/{}/records/new", table.oid.0)) {
+                    a href=(format!("/tables/{}/records/new", table.meta.oid.0)) {
                         "New Record"
                     }
                 }
                 li {
-                    a href=(format!("/tables/{}/debug", table.oid.0)) {
+                    a href=(format!("/tables/{}/debug", table.meta.oid.0)) {
                         "Debug"
                     }
                 }
@@ -91,7 +91,7 @@ pub async fn records_page(
 
 pub async fn render_records(
     state: &State,
-    table: &db::Table,
+    table: &Table,
     params: &RecordsParams,
 ) -> Markup {
     let sort_column = match &params.sort_column {
@@ -122,8 +122,8 @@ pub async fn render_records(
         LIMIT 50
         "#,
         columns,
-        table.schema,
-        table.name,
+        table.meta.schema,
+        table.meta.name,
         sort_column.name,
         sort_column.data_type,
         sort_direction,
@@ -156,12 +156,12 @@ pub async fn render_records(
 
 pub async fn render_new_record(
     state: &State,
-    table: &db::Table,
+    table: &Table,
     error: Option<SqlError>,
 ) -> Markup {
     let mut ui_form = ui::form::Form::new(table)
         .method("post")
-        .action(&format!("/tables/{}/records/new", table.oid.0));
+        .action(&format!("/tables/{}/records/new", table.meta.oid.0));
 
     if let Some(e) = error {
         ui_form = ui_form.error(e);
@@ -172,7 +172,7 @@ pub async fn render_new_record(
 
 pub async fn render_edit_record(
     state: &State,
-    table: &db::Table,
+    table: &Table,
     record_id: i64, // TODO: Dynamic primary key column, not just "id"
     error: Option<SqlError>,
 ) -> Markup {
@@ -188,8 +188,8 @@ pub async fn render_edit_record(
         WHERE id = $1
         "#,
         columns,
-        table.schema,
-        table.name,
+        table.meta.schema,
+        table.meta.name,
     );
 
     let result = sqlx::query(&statement)
@@ -201,7 +201,7 @@ pub async fn render_edit_record(
         Ok(row) => {
             let mut ui_form = ui::form::Form::new(table)
                 .method("post")
-                .action(&format!("/tables/{}/records/{}/edit", table.oid.0, record_id))
+                .action(&format!("/tables/{}/records/{}/edit", table.meta.oid.0, record_id))
                 .row(&row);
 
             if let Some(e) = error {
@@ -227,7 +227,7 @@ pub async fn render_edit_record(
 
 pub async fn create_new_record(
     state: &State,
-    table: &db::Table,
+    table: &Table,
     form_data: &HashMap<String, String>,
 ) -> Either<HttpResponse, Markup> {
     let mut columns = Vec::new();
@@ -252,8 +252,8 @@ pub async fn create_new_record(
         INSERT INTO "{}"."{}" ({})
             VALUES ({})
         "#,
-        table.schema,
-        table.name,
+        table.meta.schema,
+        table.meta.name,
         columns.join(", "),
         bind_variables.join(", "),
     );
@@ -266,7 +266,10 @@ pub async fn create_new_record(
 
     match query.execute(&state.pool).await {
         Ok(_) => Either::Left(HttpResponse::SeeOther()
-            .insert_header(("Location", format!("/tables/{}/records", table.oid.0).as_str()))
+            .insert_header((
+                "Location",
+                format!("/tables/{}/records", table.meta.oid.0).as_str()
+            ))
             .finish()
         ),
         Err(e) => Either::Right(render_new_record(state, table, Some(e)).await)
@@ -275,7 +278,7 @@ pub async fn create_new_record(
 
 pub async fn update_record(
     state: &State,
-    table: &db::Table,
+    table: &Table,
     record_id: i64,
     form_data: &HashMap<String, String>,
 ) -> Either<HttpResponse, Markup> {
@@ -295,8 +298,8 @@ pub async fn update_record(
     let statement = format!(r#"
         UPDATE "{}"."{}" SET {} WHERE id = ${}
         "#,
-        table.schema,
-        table.name,
+        table.meta.schema,
+        table.meta.name,
         props.join(", "),
         keys.len() + 1,
     );
@@ -311,7 +314,10 @@ pub async fn update_record(
 
     match query.execute(&state.pool).await {
         Ok(_) => Either::Left(HttpResponse::SeeOther()
-            .insert_header(("Location", format!("/tables/{}/records/{}/edit", table.oid.0, record_id).as_str()))
+            .insert_header((
+                "Location",
+                format!("/tables/{}/records/{}/edit", table.meta.oid.0, record_id).as_str()
+            ))
             .finish()),
 
         // FIXME: This shouldn't use same 'edit' function because it reloads the record
