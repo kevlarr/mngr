@@ -1,9 +1,16 @@
+use std::collections::HashMap;
+
 use maud::{html, Markup, Render};
-use sqlx::{postgres::PgRow, Error as SqlError, Row};
+use sqlx::{
+    postgres::PgRow,
+    types::Json,
+    Error as SqlError,
+    Row,
+};
 use time::{macros::format_description, Date, PrimitiveDateTime};
 
 use crate::{
-    db::{Column, Table},
+    db::{Column, Constraint, Position, Table},
     ui::utils::render_markdown,
 };
 
@@ -25,6 +32,11 @@ impl Render for Seconds {
     }
 }
 
+// TODO: These can probably ALL go away since there isn't going to be
+// any attempt to parse constraints in order to populate any of these values,
+// and there would be no concept of "step" anyway.
+//
+// Or maybe config should allow for populating any of these..?
 #[derive(Default, PartialEq)]
 pub struct DateAttributes {
     min: Option<Date>,
@@ -249,6 +261,11 @@ impl<'a> Render for Field<'a> {
     }
 }
 
+struct PartitionedConstraints<'a, 'b> {
+    column: HashMap<Position, &'a Vec<Json<Constraint>>>,
+    table: HashMap<&'b Vec<Position>, &'b Vec<Json<Constraint>>>,
+}
+
 pub struct Form<'row, 'tbl> {
     action: Option<String>,
     error: Option<SqlError>,
@@ -289,6 +306,24 @@ impl<'row, 'tbl> Form<'row, 'tbl> {
         self.row = Some(row);
         self
     }
+
+    fn partition_constraints(&self) -> PartitionedConstraints {
+        let mut column = HashMap::new();
+        let mut table = HashMap::new();
+
+        for constraint_set in &self.table.constraints {
+            match constraint_set.columns.as_slice() {
+                [col] => {
+                    column.insert(*col, &constraint_set.constraints);
+                },
+                _ => {
+                    table.insert(&constraint_set.columns, &constraint_set.constraints);
+                },
+            }
+        }
+
+        PartitionedConstraints { column, table }
+    }
 }
 
 impl<'a, 'b> Render for Form<'a, 'b> {
@@ -307,22 +342,32 @@ impl<'a, 'b> Render for Form<'a, 'b> {
                 field.value(value);
             }
 
-            // Look for single-column constraints for the field
-
             fields.push(field);
         }
 
-        // TODO: Render any table constraints
+        let constraints = self.partition_constraints();
 
         html! {
             c-form {
                 form method=[&self.method] action=[&self.action] {
                     @for field in &fields {
                         c-form-field { (field) }
+                        @if let Some(cons) = constraints.column.get(&field.column.position) {
+                            @for con in cons.iter() {
+                                pre { (format!("{:?}", con)) }
+                            }
+                        }
                     }
+
+                    @if constraints.table.len() > 0 {
+                        .bold { "Table Constraints" }
+                        pre { (format!("{:?}", constraints.table)) }
+                    }
+
                     c-form-controls {
                         button type="submit" { (submit_text) }
                     }
+
                     @if let Some(error) = &self.error {
                         output class="error" {
                             pre { (format!("{error:#?}")) }

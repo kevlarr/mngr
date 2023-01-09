@@ -11,7 +11,7 @@ use sqlx::{
 use super::column::Position;
 
 
-#[derive(Clone, Debug, Deserialize, SqlType)]
+#[derive(Clone, Debug, Deserialize, PartialEq, SqlType)]
 pub enum ForeignKeyMatchType {
     #[serde(rename = "f")]
     Full,
@@ -21,7 +21,7 @@ pub enum ForeignKeyMatchType {
     Simple,
 }
 
-#[derive(Clone, Debug, Deserialize, SqlType)]
+#[derive(Clone, Debug, Deserialize, PartialEq, SqlType)]
 pub enum ConstraintType {
     #[serde(rename = "c")]
     Check,
@@ -37,7 +37,7 @@ pub enum ConstraintType {
     Unique,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct ForeignRef {
     #[serde(rename = "confrelid")]
     pub oid: Oid,
@@ -47,7 +47,7 @@ pub struct ForeignRef {
     pub match_type: ForeignKeyMatchType,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Constraint {
     pub name: String,
     pub constraint_type: ConstraintType,
@@ -56,22 +56,15 @@ pub struct Constraint {
     pub foreign_ref: Option<Json<ForeignRef>>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct ConstraintSet {
     pub columns: Vec<Position>,
     // TODO: Get away from using `Json` somehow
     pub constraints: Vec<Json<Constraint>>,
 }
 
+
 impl ConstraintSet {
-    // pub fn column_constraint(&self) -> bool {
-    //     self.columns.len() == 1
-    // }
-
-    // pub fn table_constraint(&self) -> bool {
-    //     self.columns.len() > 1
-    // }
-
     pub async fn load(pool: &PgPool, oid: u32) -> Vec<Self> {
         sqlx::query_file_as!(
             Self,
