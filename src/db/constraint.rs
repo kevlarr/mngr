@@ -48,19 +48,67 @@ pub struct ForeignRef {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct Constraint {
+pub struct CheckConstraint {
     pub name: String,
-    pub constraint_type: ConstraintType,
-    pub expression: Option<String>,
-    // TODO: Get away from using `Json` somehow
-    pub foreign_ref: Option<Json<ForeignRef>>,
+    pub expression: String,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct ExclusionConstraint {
+    pub name: String,
+    pub expression: String,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct ForeignKeyConstraint {
+    pub name: String,
+    pub expression: String,
+    pub foreign_ref: ForeignRef,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct PrimaryKeyConstraint {
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct UniqueConstraint {
+    pub name: String,
+}
+
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct ConstraintMap {
+    pub check: Option<Vec<CheckConstraint>>,
+    pub exclusion: Option<Vec<ExclusionConstraint>>,
+    pub foreign_key: Option<Vec<ForeignKeyConstraint>>,
+    pub primary_key: Option<Vec<PrimaryKeyConstraint>>,
+    pub uniqueness: Option<Vec<UniqueConstraint>>,
+}
+
+impl ConstraintMap {
+    pub fn requires_unique(&self) -> bool {
+        if let Some(pk) = &self.primary_key {
+            if !pk.is_empty() {
+                return true;
+            }
+        }
+
+        if let Some(u) = &self.uniqueness {
+            if !u.is_empty() {
+                return true;
+            }
+        }
+
+        false
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct ConstraintSet {
     pub columns: Vec<Position>,
     // TODO: Get away from using `Json` somehow
-    pub constraints: Vec<Json<Constraint>>,
+    pub constraint_map: Json<ConstraintMap>,
 }
 
 
@@ -75,18 +123,4 @@ impl ConstraintSet {
         .await
         .unwrap()
     }
-}
-
-
-#[derive(Clone, Debug, Deserialize)]
-pub struct Constraints {
-    pub columns: Vec<Position>,
-    pub constraints: Vec<Constraint>,
-}
-
-impl Constraints {
-
-    // Because of limitations with using `Option<T>` in nested rows,
-    // these are selected as flat structs and then aggregated manually
-
 }

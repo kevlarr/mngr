@@ -20,4 +20,3 @@ where
 
 order by
     att.attnum
-;

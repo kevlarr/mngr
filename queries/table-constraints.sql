@@ -1,11 +1,36 @@
 select
     conkey as "columns!:Vec<Position>",
-    array_agg(jsonb_build_object(
-      'name', conname,
-      'constraint_type', contype,
-      'expression', expression,
-      'foreign_ref', foreign_ref
-    )) as "constraints!:Vec<Json<Constraint>>"
+
+    jsonb_build_object(
+
+        -- This will exclude TRIGGER ('t') constraints since those are fired
+        -- after a row insert, meaning it is hard to validate them beforehand...
+        -- TODO: Is this accurate?
+        'check', array_agg(jsonb_build_object(
+            'name', conname,
+            'expression', expression
+        )) filter (where contype = 'c'),
+
+        'exclusion', array_agg(jsonb_build_object(
+            'name', conname,
+            'expression', expression
+        )) filter (where contype = 'x'),
+
+        'foreign_key', array_agg(jsonb_build_object(
+            'name', conname,
+            'expression', expression,
+            'foreign_ref', foreign_ref
+        )) filter (where contype = 'f'),
+
+        'primary_key', array_agg(jsonb_build_object(
+            'name', conname
+        )) filter (where contype = 'p'),
+
+        'unique', array_agg(jsonb_build_object(
+            'name', conname
+        )) filter (where contype = 'u')
+
+    ) as "constraint_map!:Json<ConstraintMap>"
 
 from (
     select
@@ -33,5 +58,4 @@ from (
 ) con
 
 group by conkey
-;
-
+order by conkey

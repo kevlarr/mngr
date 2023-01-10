@@ -10,7 +10,7 @@ use sqlx::{
 use time::{macros::format_description, Date, PrimitiveDateTime};
 
 use crate::{
-    db::{Column, Constraint, Position, Table},
+    db::{Column, ConstraintMap, Position, Table},
     ui::utils::render_markdown,
 };
 
@@ -262,8 +262,8 @@ impl<'a> Render for Field<'a> {
 }
 
 struct PartitionedConstraints<'a, 'b> {
-    column: HashMap<Position, &'a Vec<Json<Constraint>>>,
-    table: HashMap<&'b Vec<Position>, &'b Vec<Json<Constraint>>>,
+    column: HashMap<Position, &'a Json<ConstraintMap>>,
+    table: HashMap<&'b Vec<Position>, &'b Json<ConstraintMap>>,
 }
 
 pub struct Form<'row, 'tbl> {
@@ -314,10 +314,10 @@ impl<'row, 'tbl> Form<'row, 'tbl> {
         for constraint_set in &self.table.constraints {
             match constraint_set.columns.as_slice() {
                 [col] => {
-                    column.insert(*col, &constraint_set.constraints);
+                    column.insert(*col, &constraint_set.constraint_map);
                 },
                 _ => {
-                    table.insert(&constraint_set.columns, &constraint_set.constraints);
+                    table.insert(&constraint_set.columns, &constraint_set.constraint_map);
                 },
             }
         }
@@ -352,9 +352,29 @@ impl<'a, 'b> Render for Form<'a, 'b> {
                 form method=[&self.method] action=[&self.action] {
                     @for field in &fields {
                         c-form-field { (field) }
-                        @if let Some(cons) = constraints.column.get(&field.column.position) {
-                            @for con in cons.iter() {
-                                pre { (format!("{:?}", con)) }
+                        @if let Some(conmap) = constraints.column.get(&field.column.position) {
+                            // Do not actually display any/all primary key & uniqueness constraints,
+                            // just note that the field must be unique
+                            @if conmap.requires_unique() {
+                                bold { "Unique" }
+                            }
+                            @if let Some(fks) = &conmap.foreign_key {
+                                p {
+                                    "foreign keys"
+                                    pre { (format!("{:?}", fks)) }
+                                }
+                            }
+                            @if let Some(chs) = &conmap.check {
+                                p {
+                                    "checks"
+                                    pre { (format!("{:?}", chs)) }
+                                }
+                            }
+                            @if let Some(exs) = &conmap.exclusion {
+                                p {
+                                    "exclusion"
+                                    pre { (format!("{:?}", exs)) }
+                                }
                             }
                         }
                     }
