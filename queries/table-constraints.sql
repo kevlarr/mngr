@@ -26,7 +26,7 @@ select
             'name', conname
         )) filter (where contype = 'p'),
 
-        'unique', array_agg(jsonb_build_object(
+        'uniqueness', array_agg(jsonb_build_object(
             'name', conname
         )) filter (where contype = 'u')
 

@@ -352,6 +352,7 @@ impl<'a, 'b> Render for Form<'a, 'b> {
                 form method=[&self.method] action=[&self.action] {
                     @for field in &fields {
                         c-form-field { (field) }
+
                         @if let Some(conmap) = constraints.column.get(&field.column.position) {
                             // Do not actually display any/all primary key & uniqueness constraints,
                             // just note that the field must be unique
