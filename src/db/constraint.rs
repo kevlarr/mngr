@@ -113,7 +113,7 @@ pub struct ConstraintSet {
 
 
 impl ConstraintSet {
-    pub async fn load(pool: &PgPool, oid: u32) -> Vec<Self> {
+    pub async fn load_all(pool: &PgPool, oid: u32) -> Vec<Self> {
         sqlx::query_file_as!(
             Self,
             "queries/table-constraints.sql",

@@ -8,7 +8,11 @@ select
         -- TODO: Is this accurate?
         'check', array_agg(jsonb_build_object(
             'name', conname,
-            'expression', expression
+            'expression', substring(
+                expression
+                from 9
+                for length(expression) - 10
+            )
         )) filter (where contype = 'c'),
 
         'exclusion', array_agg(jsonb_build_object(
@@ -38,6 +42,7 @@ from (
         conname,
         contype,
         pg_get_constraintdef(con.oid) as expression,
+
         -- Using nested rows is a royal pain in sqlx, so just convert to a json object
         case
         when confrelid = 0 then null

@@ -41,7 +41,7 @@ impl Table {
     pub async fn load(pool: &PgPool, config: &Config, oid: u32) -> Option<Self> {
         let meta = Meta::load(pool, config, oid).await?;
         let columns = Column::load(pool, oid).await;
-        let constraints = ConstraintSet::load(pool, oid).await;
+        let constraints = ConstraintSet::load_all(pool, oid).await;
 
         Some(Self { meta, columns, constraints })
     }

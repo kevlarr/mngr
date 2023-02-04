@@ -10,9 +10,19 @@ use sqlx::{
 use time::{macros::format_description, Date, PrimitiveDateTime};
 
 use crate::{
-    db::{Column, ConstraintMap, Position, Table},
+    db::{
+        constraint::CheckConstraint,
+        Column,
+        ConstraintMap,
+        Position,
+        Table},
     ui::utils::render_markdown,
 };
+
+struct PartitionedConstraints<'a, 'b> {
+    column: HashMap<Position, &'a Json<ConstraintMap>>,
+    table: HashMap<&'b Vec<Position>, &'b Json<ConstraintMap>>,
+}
 
 #[derive(Copy, Clone, PartialEq)]
 struct Days(usize);
@@ -82,14 +92,14 @@ pub enum InputType {
     TextArea(TextAreaAttributes),
 }
 
-
-pub struct Field<'a> {
+pub struct Field<'a, 'b> {
     column: &'a Column,
+    constraints: Option<&'b Json<ConstraintMap>>,
     input_type: InputType,
     value: Option<String>,
 }
 
-impl<'a> Field<'a> {
+impl<'a, 'b> Field<'a, 'b> {
     /*
     pub fn number(mut self, callback: fn(&mut NumberInputAttributes)) -> Self {
         let mut attrs = NumberInputAttributes::default();
@@ -113,8 +123,8 @@ impl<'a> Field<'a> {
     }
 }
 
-impl<'a, 'b: 'a> From<&'b Column> for Field<'a> {
-    fn from(column: &'b Column) -> Self {
+impl<'a, 'b, 'c: 'a> From<&'c Column> for Field<'a, 'b> {
+    fn from(column: &'c Column) -> Self {
         // Unless these are ever individually-configured, this could simply
         // be moved to render
         let input_type = match column.data_type.as_ref() {
@@ -135,12 +145,13 @@ impl<'a, 'b: 'a> From<&'b Column> for Field<'a> {
         Self {
             column,
             input_type,
+            constraints: None,
             value: None,
         }
     }
 }
 
-impl<'a> Render for Field<'a> {
+impl<'a, 'b> Render for Field<'a, 'b> {
     fn render(&self) -> Markup {
         // TODO: id different from name
         let id = &self.column.name;
@@ -188,7 +199,7 @@ impl<'a> Render for Field<'a> {
 
                     // Haha this is so hacky haha
                     //
-                    // TODO: And it doesn't always work because it can still include milliseconds,
+                    // FIXME: And it doesn't always work because it can still include milliseconds,
                     // which will not populate the input
                     @let value = self.value.as_ref().map(|v| v.split("+").next().unwrap().to_owned());
 
@@ -257,13 +268,28 @@ impl<'a> Render for Field<'a> {
                     (render_markdown(comment))
                 }
             }
+
+            @if let Some(conmap) = &self.constraints {
+                c-form-requirements {
+                    ul {
+                        @if conmap.requires_unique() {
+                            li.unvalidated { "Must be unique" }
+                        }
+                        @if let Some(checks) = &conmap.check {
+                            @for check in checks {
+                                li.unvalidated { pre { (check.expression) } }
+                            }
+                        }
+                        @if let Some(fks) = &conmap.foreign_key {
+                            @for fk in fks {
+                                li.unvalidated { pre { (fk.expression) } }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
-}
-
-struct PartitionedConstraints<'a, 'b> {
-    column: HashMap<Position, &'a Json<ConstraintMap>>,
-    table: HashMap<&'b Vec<Position>, &'b Json<ConstraintMap>>,
 }
 
 pub struct Form<'row, 'tbl> {
@@ -330,12 +356,14 @@ impl<'a, 'b> Render for Form<'a, 'b> {
     fn render(&self) -> Markup {
         let submit_text = self.submit_text.as_deref().unwrap_or("Submit");
 
+        let mut constraints = self.partition_constraints();
         let mut fields = Vec::new();
 
         for column in self.table.columns.iter() {
             if column.always_generated() { continue; }
 
             let mut field = Field::from(column);
+            field.constraints = constraints.column.remove(&field.column.position);
 
             if let Some(row) = &self.row {
                 let value: String = row.try_get(column.name.as_str()).unwrap();
@@ -345,38 +373,13 @@ impl<'a, 'b> Render for Form<'a, 'b> {
             fields.push(field);
         }
 
-        let constraints = self.partition_constraints();
 
         html! {
             c-form {
                 form method=[&self.method] action=[&self.action] {
                     @for field in &fields {
-                        c-form-field { (field) }
-
-                        @if let Some(conmap) = constraints.column.get(&field.column.position) {
-                            // Do not actually display any/all primary key & uniqueness constraints,
-                            // just note that the field must be unique
-                            @if conmap.requires_unique() {
-                                bold { "Unique" }
-                            }
-                            @if let Some(fks) = &conmap.foreign_key {
-                                p {
-                                    "foreign keys"
-                                    pre { (format!("{:?}", fks)) }
-                                }
-                            }
-                            @if let Some(chs) = &conmap.check {
-                                p {
-                                    "checks"
-                                    pre { (format!("{:?}", chs)) }
-                                }
-                            }
-                            @if let Some(exs) = &conmap.exclusion {
-                                p {
-                                    "exclusion"
-                                    pre { (format!("{:?}", exs)) }
-                                }
-                            }
+                        c-form-field {
+                            (field)
                         }
                     }
 
