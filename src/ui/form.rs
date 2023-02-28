@@ -1,7 +1,28 @@
-use crate::db::Column;
+use std::collections::HashMap;
+
 use maud::{html, Markup, Render};
-use sqlx::{postgres::PgRow, Error as SqlError, Row};
+use sqlx::{
+    postgres::PgRow,
+    types::Json,
+    Error as SqlError,
+    Row,
+};
 use time::{macros::format_description, Date, PrimitiveDateTime};
+
+use crate::{
+    db::{
+        constraint::CheckConstraint,
+        Column,
+        ConstraintMap,
+        Position,
+        Table},
+    ui::utils::render_markdown,
+};
+
+struct PartitionedConstraints<'a, 'b> {
+    column: HashMap<Position, &'a Json<ConstraintMap>>,
+    table: HashMap<&'b Vec<Position>, &'b Json<ConstraintMap>>,
+}
 
 #[derive(Copy, Clone, PartialEq)]
 struct Days(usize);
@@ -21,6 +42,11 @@ impl Render for Seconds {
     }
 }
 
+// TODO: These can probably ALL go away since there isn't going to be
+// any attempt to parse constraints in order to populate any of these values,
+// and there would be no concept of "step" anyway.
+//
+// Or maybe config should allow for populating any of these..?
 #[derive(Default, PartialEq)]
 pub struct DateAttributes {
     min: Option<Date>,
@@ -66,14 +92,14 @@ pub enum InputType {
     TextArea(TextAreaAttributes),
 }
 
-
-pub struct Field<'a> {
+pub struct Field<'a, 'b> {
     column: &'a Column,
+    constraints: Option<&'b Json<ConstraintMap>>,
     input_type: InputType,
     value: Option<String>,
 }
 
-impl<'a> Field<'a> {
+impl<'a, 'b> Field<'a, 'b> {
     /*
     pub fn number(mut self, callback: fn(&mut NumberInputAttributes)) -> Self {
         let mut attrs = NumberInputAttributes::default();
@@ -97,8 +123,8 @@ impl<'a> Field<'a> {
     }
 }
 
-impl<'a, 'b: 'a> From<&'b Column> for Field<'a> {
-    fn from(column: &'b Column) -> Self {
+impl<'a, 'b, 'c: 'a> From<&'c Column> for Field<'a, 'b> {
+    fn from(column: &'c Column) -> Self {
         // Unless these are ever individually-configured, this could simply
         // be moved to render
         let input_type = match column.data_type.as_ref() {
@@ -119,17 +145,18 @@ impl<'a, 'b: 'a> From<&'b Column> for Field<'a> {
         Self {
             column,
             input_type,
+            constraints: None,
             value: None,
         }
     }
 }
 
-impl<'a> Render for Field<'a> {
+impl<'a, 'b> Render for Field<'a, 'b> {
     fn render(&self) -> Markup {
         // TODO: id different from name
         let id = &self.column.name;
         let data_type = &self.column.data_type;
-        let required = !self.column.nullable && self.input_type != InputType::Boolean;
+        let required = self.column.required() && self.input_type != InputType::Boolean;
 
         html! {
             label.required[required] for=(id) { (id) }
@@ -172,7 +199,7 @@ impl<'a> Render for Field<'a> {
 
                     // Haha this is so hacky haha
                     //
-                    // TODO: And it doesn't always work because it can still include milliseconds,
+                    // FIXME: And it doesn't always work because it can still include milliseconds,
                     // which will not populate the input
                     @let value = self.value.as_ref().map(|v| v.split("+").next().unwrap().to_owned());
 
@@ -235,21 +262,57 @@ impl<'a> Render for Field<'a> {
                     }
                 }
             }
+
+            @if let Some(comment) = &self.column.description {
+                .description {
+                    (render_markdown(comment))
+                }
+            }
+
+            @if let Some(conmap) = &self.constraints {
+                c-form-requirements {
+                    ul {
+                        @if conmap.requires_unique() {
+                            li.unvalidated { "Must be unique" }
+                        }
+                        @if let Some(checks) = &conmap.check {
+                            @for check in checks {
+                                li.unvalidated { pre { (check.expression) } }
+                            }
+                        }
+                        @if let Some(fks) = &conmap.foreign_key {
+                            @for fk in fks {
+                                li.unvalidated { pre { (fk.expression) } }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
-
-#[derive(Default)]
-pub struct Form<'a> {
+pub struct Form<'row, 'tbl> {
     action: Option<String>,
     error: Option<SqlError>,
-    fields: Vec<Field<'a>>,
     method: Option<String>,
+    row: Option<&'row PgRow>,
     submit_text: Option<String>,
+    table: &'tbl Table,
 }
 
-impl<'a> Form<'a> {
+impl<'row, 'tbl> Form<'row, 'tbl> {
+    pub fn new(table: &'tbl Table) -> Self {
+        Self {
+            action: None,
+            error: None,
+            method: None,
+            row: None,
+            submit_text: None,
+            table,
+        }
+    }
+
     pub fn action(mut self, action: &str) -> Self {
         self.action = Some(action.to_owned());
         self
@@ -265,48 +328,70 @@ impl<'a> Form<'a> {
         self
     }
 
-    pub fn row(mut self, row: &PgRow) -> Self {
-        for field in &mut self.fields {
-            let value: String = row.try_get(field.column.name.as_str()).unwrap();
-
-            field.value(value);
-        }
-
+    pub fn row(mut self, row: &'row PgRow) -> Self {
+        self.row = Some(row);
         self
     }
 
-    fn add_field(&mut self, field: Field<'a>) {
-        self.fields.push(field);
-    }
-}
+    fn partition_constraints(&self) -> PartitionedConstraints {
+        let mut column = HashMap::new();
+        let mut table = HashMap::new();
 
-impl<'a, 'b: 'a> From<&'b [Column]> for Form<'a> {
-    fn from(columns: &'b [Column]) -> Self {
-        let mut form = Self::default();
-
-        for column in columns.iter() {
-            if column.always_generated() { continue; }
-
-            form.add_field(Field::from(column));
+        for constraint_set in &self.table.constraints {
+            match constraint_set.columns.as_slice() {
+                [col] => {
+                    column.insert(*col, &constraint_set.constraint_map);
+                },
+                _ => {
+                    table.insert(&constraint_set.columns, &constraint_set.constraint_map);
+                },
+            }
         }
 
-        form
+        PartitionedConstraints { column, table }
     }
 }
 
-impl<'a> Render for Form<'a> {
+impl<'a, 'b> Render for Form<'a, 'b> {
     fn render(&self) -> Markup {
         let submit_text = self.submit_text.as_deref().unwrap_or("Submit");
+
+        let mut constraints = self.partition_constraints();
+        let mut fields = Vec::new();
+
+        for column in self.table.columns.iter() {
+            if column.always_generated() { continue; }
+
+            let mut field = Field::from(column);
+            field.constraints = constraints.column.remove(&field.column.position);
+
+            if let Some(row) = &self.row {
+                let value: String = row.try_get(column.name.as_str()).unwrap();
+                field.value(value);
+            }
+
+            fields.push(field);
+        }
+
 
         html! {
             c-form {
                 form method=[&self.method] action=[&self.action] {
-                    @for field in &self.fields {
-                        c-form-field { (field) }
+                    @for field in &fields {
+                        c-form-field {
+                            (field)
+                        }
                     }
+
+                    @if constraints.table.len() > 0 {
+                        .bold { "Table Constraints" }
+                        pre { (format!("{:?}", constraints.table)) }
+                    }
+
                     c-form-controls {
                         button type="submit" { (submit_text) }
                     }
+
                     @if let Some(error) = &self.error {
                         output class="error" {
                             pre { (format!("{error:#?}")) }

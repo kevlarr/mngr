@@ -34,6 +34,10 @@ a.disabled {
   pointer-events: none;
 }
 
+b {
+  font-weight: 600;
+}
+
 button {
   cursor: pointer;
 }

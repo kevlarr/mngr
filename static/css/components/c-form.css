@@ -14,6 +14,11 @@ c-form-field {
   padding: 1rem;
 }
 
+c-form .description {
+  font-size: 0.85rem;
+  padding-top: 0.5rem;
+}
+
 c-form label {
   margin-bottom: 0.5rem;
 }
@@ -80,3 +85,25 @@ c-form button[type="submit"]:hover {
   background-color: lightskyblue;
 }
 
+c-form-requirements pre {
+  display: inline-block;
+}
+
+c-form-requirements li::before {
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+
+c-form-requirements li.unvalidated::before {
+  content: "☐";
+}
+
+c-form-requirements li.validated::before {
+  color: steelblue;
+  content: "☑";
+}
+
+c-form-requirements li.invalid::before {
+  color: firebrick;
+  content: "☒";
+}

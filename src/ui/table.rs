@@ -39,7 +39,7 @@ impl<'a, 'b: 'a> Table<'a> {
         html! {
             @let record_id: String = row.try_get("id").unwrap();
 
-            tr data-table-oid=(self.table.oid.0) data-record-id=(record_id) {
+            tr data-table-oid=(self.table.meta.oid.0) data-record-id=(record_id) {
                 @for column in columns {
                     @let col_name: &str = column.name.as_ref();
                     @let value: String = row.try_get(col_name).unwrap();

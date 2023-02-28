@@ -1,53 +1,48 @@
-use crate::Config;
 use serde::Deserialize;
-use sqlx::{
-    postgres::{
-        types::Oid,
-        PgPool,
-    },
-    types::Json,
+use sqlx::postgres::{
+    types::Oid,
+    PgPool,
 };
 
-#[derive(Clone, Debug, Deserialize)]
-pub struct ColumnValue {
-    pub name: String,
-    pub data_type: String,
-    pub position: i32,
-    pub nullable: bool,
-    pub identity: Option<String>,
-    pub generated: Option<String>,
-    pub expression: Option<String>,
-}
-
-impl ColumnValue {
-    pub fn always_generated(&self) -> bool {
-        // TODO: Serialize as enums..?
-        self.identity.as_deref() == Some("always") ||
-        self.identity.as_deref() == Some("stored")
-    }
-}
-
-pub type Column = Json<ColumnValue>;
+use crate::Config;
+use super::{Column, ConstraintSet};
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct Table {
-    pub columns: Vec<Column>,
-    pub name: String,
+pub struct Meta {
     pub oid: Oid,
+    pub name: String,
     pub schema: String,
+    pub description: Option<String>,
 }
 
-impl Table {
-    pub async fn load(pool: &PgPool, config: &Config, oid: u32) -> Option<Table> {
+impl Meta {
+    pub async fn load(pool: &PgPool, config: &Config, oid: u32) -> Option<Self> {
         sqlx::query_file_as!(
-            Table,
-            "queries/table-details.sql",
+            Self,
+            "queries/table.sql",
+            Oid(oid),
             &config.scope.include,
             &config.scope.exclude,
-            Oid(oid)
         )
             .fetch_optional(pool)
             .await
             .unwrap()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Table {
+    pub meta: Meta,
+    pub columns: Vec<Column>,
+    pub constraints: Vec<ConstraintSet>,
+}
+
+impl Table {
+    pub async fn load(pool: &PgPool, config: &Config, oid: u32) -> Option<Self> {
+        let meta = Meta::load(pool, config, oid).await?;
+        let columns = Column::load(pool, oid).await;
+        let constraints = ConstraintSet::load_all(pool, oid).await;
+
+        Some(Self { meta, columns, constraints })
     }
 }

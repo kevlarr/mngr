@@ -24,5 +24,3 @@ from (
 ) q
 
 group by nspname
-;
-
