@@ -1,6 +1,6 @@
-# Manager
+# Manager [PROTOTYPE]
 
-Manager intends to provide basic but incredibly convenient CRUD on existing database tables.
+Manager **intends** to provide basic but incredibly convenient CRUD on existing database tables.
 
 Good for people who...
 
@@ -13,13 +13,12 @@ Not good for people who...
 * Prefer code-level validations
 * Want advanced functionality, because this be basic
 
+**IMPORTANT:** This is very alpha state and development is sporadic (1) because life, and (2) because
+I'm still exploring good strategies for presenting database-level constraints (and validation failures)
+to the user in a _clear enough_ format that is actually usable for non-DBAs.
+
 
 ## Running
-
-```sh
-# The `--no-auth` flag is required, even though authentication is not yet built in
-$ mngr -c 'postgres://user:password@host:port/dbname' --no-auth
-```
 
 While developing, use `cargo watch` to automatically re-check and re-build on file changes,
 clearing the terminal screen on each reload:
