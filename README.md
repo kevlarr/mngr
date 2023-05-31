@@ -1,6 +1,7 @@
 # Manager [PROTOTYPE]
 
-Manager **intends** to provide basic but incredibly convenient CRUD on existing database tables.
+Manager **intends** to provide basic but incredibly convenient CRUD on existing database tables,
+where all you supply is the database URL and the UI (including forms and validations) is generated entirely from the database schema.
 
 Good for people who...
 
